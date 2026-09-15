@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Steal the Egg 3D</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 20px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px 15px;
+      border-radius: 8px;
+      user-select: none;
+    }
+  </style>
+  <!-- Load Three.js library for 3D rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <div id="ui">
+    <div id="status">Objective: Steal the Egg!</div>
+    <div id="score">Score: 0</div>
+  </div>
+
+  <script>
+    // --- SCENE & RENDERER SETUP ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // --- LIGHTING ---
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(20, 40, 20);
+    scene.add(dirLight);
+
+    // --- ENVIRONMENT ---
+    // Ground
+    const groundGeo = new THREE.PlaneGeometry(60, 60);
+    const groundMat = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    // Safe Base Area (Blue Square)
+    const baseGeo = new THREE.PlaneGeometry(10, 10);
+    const baseMat = new THREE.MeshLambertMaterial({ color: 0x1e90ff });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.rotation.x = -Math.PI / 2;
+    base.position.set(0, 0.01, -20);
+    scene.add(base);
+
+    // --- GAME OBJECTS ---
+    // Player (Roblox-style blocky character)
+    const playerGeo = new THREE.BoxGeometry(1.5, 3, 1.5);
+    const playerMat = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+    const player = new THREE.Mesh(playerGeo, playerMat);
+    player.position.set(0, 1.5, -20);
+    scene.add(player);
+
+    // Egg (Yellow Oval Mesh)
+    const eggGeo = new THREE.SphereGeometry(1, 16, 16);
+    eggGeo.scale(1, 1.4, 1); // Stretch sphere into egg shape
+    const eggMat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
+    const egg = new THREE.Mesh(eggGeo, eggMat);
+    const eggHomePos = new THREE.Vector3(0, 1.4, 20);
+    egg.position.copy(eggHomePos);
+    scene.add(egg);
+
+    // --- GAME STATE ---
+    let hasEgg = false;
+    let score = 0;
+    const speed = 0.2;
+    const keys = {};
+
+    // UI elements
+    const statusEl = document.getElementById('status');
+    const scoreEl = document.getElementById('score');
+
+    // --- CONTROLS ---
+    window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+    // --- GAME LOOP ---
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Player Movement (WASD / Arrow Keys)
+      if (keys['w'] || keys['arrowup']) player.position.z -= speed;
+      if (keys['s'] || keys['arrowdown']) player.position.z += speed;
+      if (keys['a'] || keys['arrowleft']) player.position.x -= speed;
+      if (keys['d'] || keys['arrowright']) player.position.x += speed;
+
+      // Keep Player on the Map Boundaries
+      player.position.x = Math.max(-28, Math.min(28, player.position.x));
+      player.position.z = Math.max(-28, Math.min(28, player.position.z));
+
+      // Third-Person Camera Tracking
+      camera.position.set(player.position.x, player.position.y + 8, player.position.z + 15);
+      camera.lookAt(player.position);
+
+      // Pickup Logic: Player touches Egg
+      if (!hasEgg && player.position.distanceTo(egg.position) < 2) {
+        hasEgg = true;
+        statusEl.innerText = "Objective: Carry the Egg back to Base!";
+      }
+
+      // Attach Egg to Player overhead when carrying
+      if (hasEgg) {
+        egg.position.set(player.position.x, player.position.y + 2.5, player.position.z);
+
+        // Score Logic: Player carrying Egg reaches Base
+        if (player.position.distanceTo(base.position) < 4) {
+          hasEgg = false;
+          score += 1;
+          scoreEl.innerText = `Score: ${score}`;
+          statusEl.innerText = "Egg Captured! Go steal another one!";
+          
+          // Reset Egg to its original spot
+          egg.position.copy(eggHomePos);
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // --- WINDOW RESIZE HANDLER ---
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+  </script>
+</body>
+</html>

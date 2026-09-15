@@ -2,150 +2,971 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Steal the Egg 3D</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Steal an Egg 3D - Roblox Style Edition</title>
   <style>
-    body {
+    * {
+      box-sizing: border-box;
       margin: 0;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-    }
-    #ui {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-size: 20px;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 10px 15px;
-      border-radius: 8px;
+      padding: 0;
       user-select: none;
     }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Fredoka One', 'Arial Black', sans-serif;
+      background-color: #1a1a1a;
+    }
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+    /* UI Overlay Styling */
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+    }
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+    }
+    .card {
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      padding: 15px 25px;
+      color: #ffffff;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .score-container {
+      text-align: center;
+    }
+    .score-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #ffcc00;
+    }
+    .score-value {
+      font-size: 38px;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 2px 2px 0px #000;
+    }
+    .objective-card {
+      max-width: 400px;
+      text-align: center;
+    }
+    .objective-title {
+      font-size: 16px;
+      color: #00e5ff;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+    .objective-desc {
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+    }
+    /* Controls Legend */
+    .controls-card {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .key {
+      background: #333;
+      border: 1px solid #777;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      color: #fff;
+      box-shadow: 0 2px 0 #111;
+    }
+    /* Game Over / Victory Overlay */
+    #overlay-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    #overlay-screen.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .banner-title {
+      font-size: 64px;
+      color: #ff3333;
+      text-transform: uppercase;
+      text-shadow: 4px 4px 0px #000;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    .banner-subtitle {
+      font-size: 22px;
+      color: #eee;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    .btn {
+      pointer-events: auto;
+      background: linear-gradient(180deg, #ff9900 0%, #ff5500 100%);
+      border: none;
+      border-bottom: 5px solid #b33600;
+      border-radius: 12px;
+      padding: 15px 40px;
+      color: #fff;
+      font-size: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+      transition: transform 0.1s, filter 0.2s;
+    }
+    .btn:hover {
+      filter: brightness(1.1);
+      transform: translateY(-2px);
+    }
+    .btn:active {
+      transform: translateY(3px);
+      border-bottom-width: 2px;
+    }
+    /* Crosshair for targeting */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 8px;
+      background: rgba(255,255,255,0.5);
+      border: 1px solid rgba(0,0,0,0.5);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    /* Stamina bar */
+    .stamina-container {
+      width: 200px;
+      height: 16px;
+      background: rgba(0,0,0,0.5);
+      border: 2px solid #555;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .stamina-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #00ff88, #00bfff);
+      transition: width 0.1s linear;
+    }
   </style>
-  <!-- Load Three.js library for 3D rendering -->
+  <!-- Three.js Engine Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-  <div id="ui">
-    <div id="status">Objective: Steal the Egg!</div>
-    <div id="score">Score: 0</div>
+  <div id="canvas-container"></div>
+
+  <div id="crosshair"></div>
+
+  <div id="ui-layer">
+    <div class="hud-top">
+      <div class="card score-container">
+        <div class="score-title">Eggs Stolen</div>
+        <div id="score-val" class="score-value">0</div>
+      </div>
+
+      <div class="card objective-card">
+        <div class="objective-title">Current Objective</div>
+        <div id="objective-text" class="objective-desc">Sneak past the giant snake & grab the Egg!</div>
+      </div>
+    </div>
+
+    <div class="card controls-card">
+      <div><span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span> : Move Character</div>
+      <div><span class="key">SHIFT</span> : Sprint</div>
+      <div><span class="key">SPACE</span> : Jump</div>
+      <div><span class="key">MOUSE</span> : Look Around</div>
+      <div class="stamina-container">
+        <div id="stamina-bar" class="stamina-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over / Restart Screen -->
+  <div id="overlay-screen">
+    <h1 id="overlay-title" class="banner-title">YOU WERE EATEN!</h1>
+    <p id="overlay-sub" class="banner-subtitle">The giant guardian snake caught you stealing!</p>
+    <button id="respawn-btn" class="btn">RESPAWN</button>
   </div>
 
   <script>
-    // --- SCENE & RENDERER SETUP ---
+    // =========================================================================
+    // 1. PROCEDURAL TEXTURE GENERATORS (NO EXTERNAL ASSETS NEEDED)
+    // =========================================================================
+
+    // Grass Ground Texture
+    function createGrassTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#3a8c2d';
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Add grass noise blades
+      for (let i = 0; i < 40000; i++) {
+        const x = Math.random() * 512;
+        const y = Math.random() * 512;
+        const shade = Math.random();
+        if (shade > 0.6) ctx.fillStyle = '#4cc437';
+        else if (shade > 0.3) ctx.fillStyle = '#2d6e22';
+        else ctx.fillStyle = '#225219';
+        ctx.fillRect(x, y, 2, 4);
+      }
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(16, 16);
+      return texture;
+    }
+
+    // Snake Scale Skin Texture
+    function createSnakeSkinTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#e69500';
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Draw Diamond Scale Pattern
+      ctx.fillStyle = '#5c3800';
+      const tileSize = 32;
+      for (let y = 0; y < 512; y += tileSize) {
+        for (let x = 0; x < 512; x += tileSize) {
+          if ((x / tileSize + y / tileSize) % 2 === 0) {
+            ctx.beginPath();
+            ctx.moveTo(x + tileSize/2, y);
+            ctx.lineTo(x + tileSize, y + tileSize/2);
+            ctx.lineTo(x + tileSize/2, y + tileSize);
+            ctx.lineTo(x, y + tileSize/2);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(4, 1);
+      return texture;
+    }
+
+    // Striped Golden Egg Texture
+    function createEggTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#ffd700'; // Bright gold base
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Draw dark orange-brown stripes
+      ctx.fillStyle = '#8b4513';
+      for (let i = -2; i < 10; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, i * 80);
+        ctx.lineTo(512, i * 80 + 120);
+        ctx.lineTo(512, i * 80 + 160);
+        ctx.lineTo(0, i * 80 + 40);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    // Bacon Hair / Roblox Face Texture
+    function createFaceTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      // Yellow Head skin tone
+      ctx.fillStyle = '#f5cd2f';
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Eyes
+      ctx.fillStyle = '#111111';
+      ctx.beginPath();
+      ctx.arc(70, 100, 16, 0, Math.PI * 2);
+      ctx.arc(186, 100, 16, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Eye highlights
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(65, 95, 5, 0, Math.PI * 2);
+      ctx.arc(181, 95, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Roblox Smirk / Smile
+      ctx.strokeStyle = '#111111';
+      ctx.lineWidth = 8;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(128, 140, 50, 0.1 * Math.PI, 0.9 * Math.PI, false);
+      ctx.stroke();
+
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    // =========================================================================
+    // 2. AUDIO SYNTHESIZER (WEBAUDIO API FOR SOUND EFFECTS)
+    // =========================================================================
+
+    class SoundEffects {
+      constructor() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      playPickUp() {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.3);
+      }
+
+      playScore() {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+        osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+        osc.frequency.setValueAtTime(1046.50, now + 0.3); // C6
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(now + 0.6);
+      }
+
+      playHiss() {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        // White noise generation for snake hiss
+        const bufferSize = this.ctx.sampleRate * 0.4;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 3000;
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start();
+      }
+    }
+
+    const sfx = new SoundEffects();
+
+    // =========================================================================
+    // 3. MAIN GAME INITIALIZATION & SCENE SETUP
+    // =========================================================================
+
+    const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+    scene.background = new THREE.Color(0x7ec0ee); // Sky blue
+    scene.fog = new THREE.FogExp2(0x7ec0ee, 0.008);
 
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
 
-    // --- LIGHTING ---
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(20, 40, 20);
-    scene.add(dirLight);
+    const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    sunLight.position.set(50, 100, 50);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 250;
+    const d = 80;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    scene.add(sunLight);
 
-    // --- ENVIRONMENT ---
-    // Ground
-    const groundGeo = new THREE.PlaneGeometry(60, 60);
-    const groundMat = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
+    // =========================================================================
+    // 4. ENVIRONMENT CREATION (GROUND, SAFE ZONE, TREES)
+    // =========================================================================
+
+    // Main Grass Field
+    const grassGeo = new THREE.PlaneGeometry(200, 200);
+    const grassMat = new THREE.MeshStandardMaterial({
+      map: createGrassTexture(),
+      roughness: 0.8,
+      metalness: 0.1
+    });
+    const ground = new THREE.Mesh(grassGeo, grassMat);
     ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
     scene.add(ground);
 
-    // Safe Base Area (Blue Square)
-    const baseGeo = new THREE.PlaneGeometry(10, 10);
-    const baseMat = new THREE.MeshLambertMaterial({ color: 0x1e90ff });
-    const base = new THREE.Mesh(baseGeo, baseMat);
-    base.rotation.x = -Math.PI / 2;
-    base.position.set(0, 0.01, -20);
-    scene.add(base);
+    // Safe Base Zone (Player Home Base)
+    const baseGroup = new THREE.Group();
+    baseGroup.position.set(0, 0.1, -70);
 
-    // --- GAME OBJECTS ---
-    // Player (Roblox-style blocky character)
-    const playerGeo = new THREE.BoxGeometry(1.5, 3, 1.5);
-    const playerMat = new THREE.MeshLambertMaterial({ color: 0xff0000 });
-    const player = new THREE.Mesh(playerGeo, playerMat);
-    player.position.set(0, 1.5, -20);
-    scene.add(player);
+    const basePadGeo = new THREE.CylinderGeometry(12, 12, 0.4, 32);
+    const basePadMat = new THREE.MeshStandardMaterial({ color: 0x00a8ff, roughness: 0.3 });
+    const basePad = new THREE.Mesh(basePadGeo, basePadMat);
+    basePad.receiveShadow = true;
+    baseGroup.add(basePad);
 
-    // Egg (Yellow Oval Mesh)
-    const eggGeo = new THREE.SphereGeometry(1, 16, 16);
-    eggGeo.scale(1, 1.4, 1); // Stretch sphere into egg shape
-    const eggMat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
+    // Outer ring for base
+    const baseRingGeo = new THREE.RingGeometry(11, 12.5, 32);
+    const baseRingMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    const baseRing = new THREE.Mesh(baseRingGeo, baseRingMat);
+    baseRing.rotation.x = -Math.PI / 2;
+    baseRing.position.y = 0.25;
+    baseGroup.add(baseRing);
+
+    scene.add(baseGroup);
+
+    // Egg Nest Platform (Snake Territory)
+    const nestGroup = new THREE.Group();
+    nestGroup.position.set(0, 0.1, 60);
+
+    const nestGeo = new THREE.CylinderGeometry(14, 16, 1, 32);
+    const nestMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
+    const nest = new THREE.Mesh(nestGeo, nestMat);
+    nest.receiveShadow = true;
+    nestGroup.add(nest);
+
+    scene.add(nestGroup);
+
+    // Decorative Low-Poly Trees
+    function spawnTree(x, z) {
+      const tree = new THREE.Group();
+      tree.position.set(x, 0, z);
+
+      // Trunk
+      const trunkGeo = new THREE.CylinderGeometry(0.8, 1.2, 6, 8);
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a3d28, roughness: 0.9 });
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.position.y = 3;
+      trunk.castShadow = true;
+      tree.add(trunk);
+
+      // Leaves (Roblox style stacked blocks/cones)
+      const foliageGeo = new THREE.ConeGeometry(5, 8, 6);
+      const foliageMat = new THREE.MeshStandardMaterial({ color: 0x2e8b57, roughness: 0.6, flatShading: true });
+
+      const leaf1 = new THREE.Mesh(foliageGeo, foliageMat);
+      leaf1.position.y = 7;
+      leaf1.castShadow = true;
+      tree.add(leaf1);
+
+      const leaf2 = new THREE.Mesh(foliageGeo, foliageMat);
+      leaf2.position.y = 10;
+      leaf2.scale.set(0.75, 0.75, 0.75);
+      leaf2.castShadow = true;
+      tree.add(leaf2);
+
+      scene.add(tree);
+    }
+
+    // Spawn random trees along boundaries
+    for (let i = 0; i < 40; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 50 + Math.random() * 40;
+      spawnTree(Math.cos(angle) * radius, Math.sin(angle) * radius);
+    }
+
+    // Invisible World Boundary Walls
+    const wallGeo = new THREE.BoxGeometry(200, 20, 2);
+    const wallMat = new THREE.MeshBasicMaterial({ visible: false });
+    
+    const wallN = new THREE.Mesh(wallGeo, wallMat); wallN.position.set(0, 10, -100); scene.add(wallN);
+    const wallS = new THREE.Mesh(wallGeo, wallMat); wallS.position.set(0, 10, 100); scene.add(wallS);
+    const wallE = new THREE.Mesh(wallGeo, wallMat); wallE.rotation.y = Math.PI/2; wallE.position.set(100, 10, 0); scene.add(wallE);
+    const wallW = new THREE.Mesh(wallGeo, wallMat); wallW.rotation.y = Math.PI/2; wallW.position.set(-100, 10, 0); scene.add(wallW);
+
+    // =========================================================================
+    // 5. BUILD THE ROBLOX CHARACTER MODEL (PLAYER)
+    // =========================================================================
+
+    function createRobloxCharacter() {
+      const charGroup = new THREE.Group();
+
+      const faceTexture = createFaceTexture();
+
+      // Materials (Classic Roblox Colors)
+      const skinMat = new THREE.MeshStandardMaterial({ color: 0xf5cd2f, roughness: 0.4 }); // Yellow Head/Hands
+      const torsoMat = new THREE.MeshStandardMaterial({ color: 0x0000ff, roughness: 0.5 }); // Blue Shirt
+      const pantsMat = new THREE.MeshStandardMaterial({ color: 0x008000, roughness: 0.5 }); // Green Pants
+      const hairMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.7 }); // Bacon Hair Brown
+      const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture, roughness: 0.4 });
+
+      // Torso
+      const torsoGeo = new THREE.BoxGeometry(2, 2, 1);
+      const torso = new THREE.Mesh(torsoGeo, torsoMat);
+      torso.position.y = 2.5;
+      torso.castShadow = true;
+      charGroup.add(torso);
+
+      // Head
+      const headGeo = new THREE.BoxGeometry(1.25, 1.25, 1.25);
+      // Multi-material head for front face
+      const headMaterials = [
+        skinMat, skinMat, skinMat, skinMat,
+        faceMat, // Front face
+        skinMat
+      ];
+      const head = new THREE.Mesh(headGeo, headMaterials);
+      head.position.y = 4.125;
+      head.castShadow = true;
+      charGroup.add(head);
+
+      // Bacon Hair Strips
+      const hairGroup = new THREE.Group();
+      const stripGeo = new THREE.BoxGeometry(0.3, 0.15, 1.4);
+      for (let i = -2; i <= 2; i++) {
+        const strip = new THREE.Mesh(stripGeo, hairMat);
+        strip.position.set(i * 0.25, 4.8, 0.05);
+        strip.rotation.z = i * -0.08;
+        strip.rotation.x = 0.1;
+        strip.castShadow = true;
+        hairGroup.add(strip);
+      }
+      charGroup.add(hairGroup);
+
+      // Left Arm
+      const armGeo = new THREE.BoxGeometry(1, 2, 1);
+      const leftArm = new THREE.Mesh(armGeo, skinMat);
+      leftArm.position.set(-1.6, 2.5, 0);
+      leftArm.geometry.translate(0, -0.5, 0); // Pivot point at shoulder
+      leftArm.castShadow = true;
+      charGroup.add(leftArm);
+
+      // Right Arm
+      const rightArm = new THREE.Mesh(armGeo, skinMat);
+      rightArm.position.set(1.6, 2.5, 0);
+      rightArm.geometry.translate(0, -0.5, 0); // Pivot point at shoulder
+      rightArm.castShadow = true;
+      charGroup.add(rightArm);
+
+      // Left Leg
+      const legGeo = new THREE.BoxGeometry(1, 2, 1);
+      const leftLeg = new THREE.Mesh(legGeo, pantsMat);
+      leftLeg.position.set(-0.55, 1, 0);
+      leftLeg.geometry.translate(0, -0.5, 0); // Pivot point at hip
+      leftLeg.castShadow = true;
+      charGroup.add(leftLeg);
+
+      // Right Leg
+      const rightLeg = new THREE.Mesh(legGeo, pantsMat);
+      rightLeg.position.set(0.55, 1, 0);
+      rightLeg.geometry.translate(0, -0.5, 0); // Pivot point at hip
+      rightLeg.castShadow = true;
+      charGroup.add(rightLeg);
+
+      return {
+        group: charGroup,
+        head,
+        leftArm,
+        rightArm,
+        leftLeg,
+        rightLeg
+      };
+    }
+
+    const playerModel = createRobloxCharacter();
+    scene.add(playerModel.group);
+    playerModel.group.position.copy(baseGroup.position); // Start at base
+
+    // =========================================================================
+    // 6. GIANT GUARD SNAKE MODEL & SYSTEM
+    // =========================================================================
+
+    const snakeSkinTex = createSnakeSkinTexture();
+    const snakeMat = new THREE.MeshStandardMaterial({ map: snakeSkinTex, roughness: 0.5 });
+    const snakeEyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+    const SNAKE_SEGMENTS = 18;
+    const snakeSegments = [];
+    const snakeGroup = new THREE.Group();
+
+    // Snake Head
+    const snakeHeadGeo = new THREE.SphereGeometry(2.2, 16, 16);
+    snakeHeadGeo.scale(1, 0.7, 1.3); // Flatten and elongate head
+    const snakeHead = new THREE.Mesh(snakeHeadGeo, snakeMat);
+    snakeHead.castShadow = true;
+    snakeGroup.add(snakeHead);
+
+    // Glowing Red Eyes
+    const eyeGeo = new THREE.SphereGeometry(0.35, 8, 8);
+    const leftEye = new THREE.Mesh(eyeGeo, snakeEyeMat);
+    leftEye.position.set(-0.9, 0.6, 1.5);
+    snakeHead.add(leftEye);
+
+    const rightEye = new THREE.Mesh(eyeGeo, snakeEyeMat);
+    rightEye.position.set(0.9, 0.6, 1.5);
+    snakeHead.add(rightEye);
+
+    // Snake Body Segments
+    for (let i = 0; i < SNAKE_SEGMENTS; i++) {
+      const radius = 1.8 * (1 - (i / SNAKE_SEGMENTS) * 0.55); // Taper tail
+      const segGeo = new THREE.SphereGeometry(radius, 12, 12);
+      const segment = new THREE.Mesh(segGeo, snakeMat);
+      segment.castShadow = true;
+      segment.position.set(0, 1, nestGroup.position.z - (i * 2.2));
+      snakeSegments.push(segment);
+      scene.add(segment);
+    }
+
+    scene.add(snakeGroup);
+    snakeHead.position.set(nestGroup.position.x, 1.5, nestGroup.position.z);
+
+    // =========================================================================
+    // 7. EGG OBJECT CREATION
+    // =========================================================================
+
+    const eggGeo = new THREE.SphereGeometry(1.8, 32, 32);
+    eggGeo.scale(1, 1.45, 1); // Egg shape ratio
+    const eggMat = new THREE.MeshStandardMaterial({
+      map: createEggTexture(),
+      roughness: 0.2,
+      metalness: 0.3
+    });
     const egg = new THREE.Mesh(eggGeo, eggMat);
-    const eggHomePos = new THREE.Vector3(0, 1.4, 20);
+    egg.castShadow = true;
+
+    const eggHomePos = new THREE.Vector3(nestGroup.position.x, 2.5, nestGroup.position.z);
     egg.position.copy(eggHomePos);
     scene.add(egg);
 
-    // --- GAME STATE ---
-    let hasEgg = false;
+    // Gold pedestal glow under egg
+    const glowLight = new THREE.PointLight(0xffd700, 2, 15);
+    glowLight.position.copy(eggHomePos);
+    scene.add(glowLight);
+
+    // =========================================================================
+    // 8. GAME CONTROLLER & LOGIC
+    // =========================================================================
+
     let score = 0;
-    const speed = 0.2;
+    let hasEgg = false;
+    let isDead = false;
+    let stamina = 100;
+
+    // Movement Vectors
+    const playerPos = playerModel.group.position;
+    const velocity = new THREE.Vector3();
+    let yVelocity = 0;
+    let isGrounded = true;
+
+    // Camera Orbit State
+    let cameraPitch = 0.2;
+    let cameraYaw = 0;
+    const cameraDistance = 14;
+
+    // Keyboard State Tracker
     const keys = {};
 
-    // UI elements
-    const statusEl = document.getElementById('status');
-    const scoreEl = document.getElementById('score');
+    window.addEventListener('keydown', (e) => {
+      keys[e.code] = true;
+    });
 
-    // --- CONTROLS ---
-    window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
-    window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+    window.addEventListener('keyup', (e) => {
+      keys[e.code] = false;
+    });
 
-    // --- GAME LOOP ---
+    // Pointer Lock for First/Third Person Camera Look
+    document.body.addEventListener('click', () => {
+      if (!isDead) {
+        document.body.requestPointerLock();
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (document.pointerLockElement === document.body) {
+        cameraYaw -= e.movementX * 0.003;
+        cameraPitch -= e.movementY * 0.003;
+        cameraPitch = Math.max(-0.2, Math.min(1.2, cameraPitch)); // Clamp camera angles
+      }
+    });
+
+    // Respawn Button Listener
+    document.getElementById('respawn-btn').addEventListener('click', respawnPlayer);
+
+    function respawnPlayer() {
+      isDead = false;
+      hasEgg = false;
+      stamina = 100;
+      playerPos.copy(baseGroup.position);
+      egg.position.copy(eggHomePos);
+      egg.scale.set(1, 1, 1);
+      scene.add(egg);
+      
+      document.getElementById('overlay-screen').classList.remove('active');
+      document.getElementById('objective-text').innerText = "Sneak past the giant snake & grab the Egg!";
+      document.body.requestPointerLock();
+    }
+
+    // =========================================================================
+    // 9. ANIMATION & GAME LOOP
+    // =========================================================================
+
+    let clock = new THREE.Clock();
+    let animTimer = 0;
+    let snakeTimer = 0;
+
     function animate() {
       requestAnimationFrame(animate);
 
-      // Player Movement (WASD / Arrow Keys)
-      if (keys['w'] || keys['arrowup']) player.position.z -= speed;
-      if (keys['s'] || keys['arrowdown']) player.position.z += speed;
-      if (keys['a'] || keys['arrowleft']) player.position.x -= speed;
-      if (keys['d'] || keys['arrowright']) player.position.x += speed;
+      const delta = Math.min(clock.getDelta(), 0.1);
+      animTimer += delta;
+      snakeTimer += delta * 2;
 
-      // Keep Player on the Map Boundaries
-      player.position.x = Math.max(-28, Math.min(28, player.position.x));
-      player.position.z = Math.max(-28, Math.min(28, player.position.z));
+      if (!isDead) {
+        // --- 1. PLAYER MOVEMENT & PHYSICS ---
+        let isSprinting = keys['ShiftLeft'] || keys['ShiftRight'];
+        
+        // Stamina logic
+        if (isSprinting && stamina > 0) {
+          stamina -= delta * 35;
+          if (stamina <= 0) { stamina = 0; isSprinting = false; }
+        } else if (!isSprinting && stamina < 100) {
+          stamina += delta * 20;
+          if (stamina > 100) stamina = 100;
+        }
+        document.getElementById('stamina-bar').style.width = stamina + '%';
 
-      // Third-Person Camera Tracking
-      camera.position.set(player.position.x, player.position.y + 8, player.position.z + 15);
-      camera.lookAt(player.position);
+        const moveSpeed = (isSprinting ? 18 : 10) * delta;
 
-      // Pickup Logic: Player touches Egg
-      if (!hasEgg && player.position.distanceTo(egg.position) < 2) {
-        hasEgg = true;
-        statusEl.innerText = "Objective: Carry the Egg back to Base!";
-      }
+        // Calculate Direction relative to Camera Yaw
+        const moveDir = new THREE.Vector3();
+        if (keys['KeyW']) moveDir.z -= 1;
+        if (keys['KeyS']) moveDir.z += 1;
+        if (keys['KeyA']) moveDir.x -= 1;
+        if (keys['KeyD']) moveDir.x += 1;
 
-      // Attach Egg to Player overhead when carrying
-      if (hasEgg) {
-        egg.position.set(player.position.x, player.position.y + 2.5, player.position.z);
+        moveDir.normalize();
+        moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
 
-        // Score Logic: Player carrying Egg reaches Base
-        if (player.position.distanceTo(base.position) < 4) {
-          hasEgg = false;
-          score += 1;
-          scoreEl.innerText = `Score: ${score}`;
-          statusEl.innerText = "Egg Captured! Go steal another one!";
+        if (moveDir.length() > 0) {
+          playerPos.x += moveDir.x * moveSpeed;
+          playerPos.z += moveDir.z * moveSpeed;
+
+          // Rotate character smoothly toward movement direction
+          const targetAngle = Math.atan2(moveDir.x, moveDir.z);
+          playerModel.group.rotation.y = targetAngle;
+
+          // Limb Walking Animation
+          const limbAngle = Math.sin(animTimer * (isSprinting ? 18 : 12)) * 0.7;
+          playerModel.leftLeg.rotation.x = limbAngle;
+          playerModel.rightLeg.rotation.x = -limbAngle;
+          playerModel.leftArm.rotation.x = -limbAngle;
+          playerModel.rightArm.rotation.x = limbAngle;
+        } else {
+          // Idle posture
+          playerModel.leftLeg.rotation.x = 0;
+          playerModel.rightLeg.rotation.x = 0;
+          playerModel.leftArm.rotation.x = 0;
+          playerModel.rightArm.rotation.x = 0;
+        }
+
+        // Jump & Gravity Physics
+        if (keys['Space'] && isGrounded) {
+          yVelocity = 12;
+          isGrounded = false;
+        }
+
+        yVelocity -= 32 * delta; // Gravity
+        playerPos.y += yVelocity * delta;
+
+        if (playerPos.y <= 0) {
+          playerPos.y = 0;
+          yVelocity = 0;
+          isGrounded = true;
+        }
+
+        // Map Boundary Constraints
+        playerPos.x = Math.max(-95, Math.min(95, playerPos.x));
+        playerPos.z = Math.max(-95, Math.min(95, playerPos.z));
+
+        // --- 2. CAMERA POSITIONING ---
+        const camX = playerPos.x + Math.sin(cameraYaw) * Math.cos(cameraPitch) * cameraDistance;
+        const camY = playerPos.y + 3 + Math.sin(cameraPitch) * cameraDistance;
+        const camZ = playerPos.z + Math.cos(cameraYaw) * Math.cos(cameraPitch) * cameraDistance;
+
+        camera.position.set(camX, camY, camZ);
+        camera.lookAt(playerPos.x, playerPos.y + 3, playerPos.z);
+
+        // --- 3. EGG PICKUP & BASE DELIVERY MECHANICS ---
+        const distToEgg = playerPos.distanceTo(egg.position);
+
+        // Pickup Egg
+        if (!hasEgg && distToEgg < 3.5) {
+          hasEgg = true;
+          sfx.playPickUp();
+          sfx.playHiss(); // Snake gets angry!
+          document.getElementById('objective-text').innerText = "RUN BACK TO SAFE BASE WITH THE EGG!";
+        }
+
+        // Carry Egg overhead
+        if (hasEgg) {
+          egg.position.set(playerPos.x, playerPos.y + 5.5, playerPos.z);
+          egg.rotation.y += delta * 2;
+
+          // Safe Base Check
+          const distToBase = playerPos.distanceTo(baseGroup.position);
+          if (distToBase < 10) {
+            hasEgg = false;
+            score++;
+            sfx.playScore();
+            document.getElementById('score-val').innerText = score;
+            document.getElementById('objective-text').innerText = "Egg Saved! Go steal another one!";
+            
+            // Reset Egg to Home Platform
+            egg.position.copy(eggHomePos);
+          }
+        } else {
+          // Bobbing effect when egg is on pedestal
+          egg.position.y = eggHomePos.y + Math.sin(animTimer * 3) * 0.3;
+          egg.rotation.y += delta * 0.5;
+        }
+
+        // --- 4. GIANT GUARDIAN SNAKE AI & SLITHERING ---
+        let snakeTarget = new THREE.Vector3();
+
+        if (hasEgg) {
+          // Aggressive Chase Mode!
+          snakeTarget.copy(playerPos);
+        } else {
+          // Patrol Circle Mode around Nest
+          const patrolRadius = 22;
+          snakeTarget.x = nestGroup.position.x + Math.cos(snakeTimer * 0.5) * patrolRadius;
+          snakeTarget.z = nestGroup.position.z + Math.sin(snakeTimer * 0.5) * patrolRadius;
+          snakeTarget.y = 1.5;
+        }
+
+        // Snake Head Movement
+        const headPos = snakeHead.position;
+        const snakeSpeed = (hasEgg ? 13 : 7) * delta;
+        const headDir = new THREE.Vector3().subVectors(snakeTarget, headPos).normalize();
+        
+        headPos.x += headDir.x * snakeSpeed;
+        headPos.z += headDir.z * snakeSpeed;
+        snakeHead.lookAt(snakeTarget.x, headPos.y, snakeTarget.z);
+
+        // Snake Segment Inverse Kinematics / Follow System
+        let prevSegment = snakeHead;
+        snakeSegments.forEach((seg, idx) => {
+          const segDist = 2.0;
+          const targetSegPos = prevSegment.position.clone();
+          const currentSegPos = seg.position.clone();
+
+          const dir = new THREE.Vector3().subVectors(targetSegPos, currentSegPos).normalize();
+          const newPos = targetSegPos.clone().sub(dir.multiplyScalar(segDist));
           
-          // Reset Egg to its original spot
-          egg.position.copy(eggHomePos);
+          // Add S-curve slither wave motion
+          const wave = Math.sin(snakeTimer * 4 - idx * 0.4) * 0.4;
+          newPos.x += Math.cos(snakeHead.rotation.y) * wave;
+          newPos.z += Math.sin(snakeHead.rotation.y) * wave;
+          newPos.y = 1.2;
+
+          seg.position.copy(newPos);
+          seg.lookAt(prevSegment.position);
+          prevSegment = seg;
+        });
+
+        // --- 5. GAME OVER CATCH CONDITION ---
+        const distToSnakeHead = playerPos.distanceTo(snakeHead.position);
+        if (distToSnakeHead < 3.2) {
+          // Caught by Snake!
+          isDead = true;
+          document.exitPointerLock();
+          document.getElementById('overlay-screen').classList.add('active');
         }
       }
 
       renderer.render(scene, camera);
     }
 
-    // --- WINDOW RESIZE HANDLER ---
+    // Handle Window Resizing
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    // Start Game Loop
     animate();
   </script>
 </body>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Steal an Egg 3D - Base Treadmill Edition</title>
+  <title>Steal an Egg 3D - Front Treadmill Speed Edition</title>
   <style>
     * {
       box-sizing: border-box;
@@ -50,6 +50,12 @@
       justify-content: space-between;
       align-items: flex-start;
       width: 100%;
+      gap: 16px;
+    }
+
+    .hud-group {
+      display: flex;
+      gap: 16px;
     }
 
     .card {
@@ -65,7 +71,7 @@
 
     .score-container {
       text-align: center;
-      min-width: 160px;
+      min-width: 140px;
     }
 
     .score-title {
@@ -77,8 +83,12 @@
       margin-bottom: 4px;
     }
 
+    .speed-title {
+      color: #00ff66;
+    }
+
     .score-value {
-      font-size: 42px;
+      font-size: 38px;
       font-weight: 900;
       color: #ffffff;
       text-shadow: 0 3px 0 #000000;
@@ -110,7 +120,7 @@
       left: 24px;
       font-size: 13px;
       line-height: 1.8;
-      width: 280px;
+      width: 300px;
     }
 
     .key {
@@ -245,22 +255,29 @@
 
   <div id="ui-layer">
     <div class="hud-top">
-      <div class="card score-container">
-        <div class="score-title">Base Vault</div>
-        <div id="score-val" class="score-value">0 / 6</div>
+      <div class="hud-group">
+        <div class="card score-container">
+          <div class="score-title">Base Vault</div>
+          <div id="score-val" class="score-value">0 / 6</div>
+        </div>
+
+        <div class="card score-container">
+          <div class="score-title speed-title">Speed</div>
+          <div id="speed-val" class="score-value">10</div>
+        </div>
       </div>
 
       <div class="card objective-card">
         <div class="objective-title">Current Mission</div>
-        <div id="objective-text" class="objective-desc">Steal an egg from the sleeping snake nest!</div>
+        <div id="objective-text" class="objective-desc">Step on the front treadmill to gain speed!</div>
       </div>
     </div>
 
     <div class="card controls-card">
-      <div><span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span> : Walk</div>
+      <div><span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span> : Move</div>
       <div><span class="key">SPACE</span> : Jump</div>
-      <div><span class="key">E</span> : Place Egg in Base Pod</div>
-      <div><span class="key">MOUSE</span> : Camera Look</div>
+      <div><span class="key">E</span> : Store Egg inside Base</div>
+      <div><span class="key">TREADMILL</span> : Adds +1 Speed & Launches You</div>
     </div>
 
     <div id="notification-feed"></div>
@@ -268,7 +285,7 @@
 
   <div id="overlay-screen">
     <h1 id="overlay-title" class="banner-title">ELIMINATED!</h1>
-    <p id="overlay-sub" class="banner-subtitle">The giant guardian snake woke up and caught you!</p>
+    <p id="overlay-sub" class="banner-subtitle">The giant guardian snake caught you!</p>
     <button id="respawn-btn" class="btn">RESPAWN</button>
   </div>
 
@@ -281,11 +298,12 @@
       MAX_PODS: 6,
       GRAVITY: 32,
       JUMP_FORCE: 12,
-      WALK_SPEED: 10,
+      BASE_WALK_SPEED: 10,
       CAMERA_DISTANCE: 14,
-      SNAKE_CHASE_SPEED: 14.5,
-      TREADMILL_SPEED: 1.0 // Moves player at 1 speed per second
+      SNAKE_CHASE_SPEED: 14.5
     };
+
+    let playerBonusSpeed = 0;
 
     class TextureFactory {
       static createGrass() {
@@ -433,9 +451,9 @@
         ctx.fillStyle = '#11141a';
         ctx.fillRect(0, 0, 256, 256);
 
-        ctx.fillStyle = '#ffaa00';
+        ctx.fillStyle = '#00ff66';
         for (let y = 0; y < 256; y += 32) {
-          ctx.fillRect(0, y, 256, 6);
+          ctx.fillRect(0, y, 256, 8);
         }
 
         const texture = new THREE.CanvasTexture(canvas);
@@ -472,6 +490,21 @@
         gain.connect(this.ctx.destination);
         osc.start();
         osc.stop(this.ctx.currentTime + 0.25);
+      }
+
+      playSpeedBoost() {
+        this.init();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.2);
       }
 
       playDeposit() {
@@ -527,24 +560,6 @@
         gain.connect(this.ctx.destination);
         osc.start();
         osc.stop(this.ctx.currentTime + 0.08);
-      }
-
-      playVictory() {
-        this.init();
-        const now = this.ctx.currentTime;
-        const notes = [523.25, 659.25, 783.99, 987.77, 1046.50];
-        notes.forEach((freq, idx) => {
-          const osc = this.ctx.createOscillator();
-          const gain = this.ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.value = freq;
-          gain.gain.setValueAtTime(0.3, now + idx * 0.12);
-          gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.12 + 0.4);
-          osc.connect(gain);
-          gain.connect(this.ctx.destination);
-          osc.start(now + idx * 0.12);
-          osc.stop(now + idx * 0.12 + 0.4);
-        });
       }
     }
 
@@ -616,7 +631,7 @@
         this.treadmillTex = TextureFactory.createTreadmillTex();
 
         this.buildBaseStructure();
-        this.buildTreadmill();
+        this.buildFrontTreadmill();
         this.buildStoragePods();
         scene.add(this.group);
       }
@@ -656,7 +671,6 @@
 
         const pillarGeo = new THREE.CylinderGeometry(0.6, 0.8, 6, 16);
         const pillarMat = new THREE.MeshStandardMaterial({ color: 0x1f2430, metalness: 0.8, roughness: 0.2 });
-        const capMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
 
         const corners = [
           [-13, -10], [13, -10],
@@ -668,49 +682,42 @@
           pillar.position.set(x, 3, z);
           pillar.castShadow = true;
           this.group.add(pillar);
-
-          const capGeo = new THREE.SphereGeometry(0.7, 16, 16);
-          const cap = new THREE.Mesh(capGeo, capMat);
-          cap.position.set(x, 6, z);
-          this.group.add(cap);
-
-          const light = new THREE.PointLight(0x00e5ff, 0.8, 12);
-          light.position.set(x, 6.2, z);
-          this.group.add(light);
         });
       }
 
-      buildTreadmill() {
+      buildFrontTreadmill() {
         const treadmillGroup = new THREE.Group();
-        treadmillGroup.position.set(0, 0.6, 0);
+        // Placed directly in front of the base (positive Z relative to base)
+        treadmillGroup.position.set(0, 0.1, 16);
 
-        const beltGeo = new THREE.BoxGeometry(6, 0.1, 14);
+        const beltGeo = new THREE.BoxGeometry(8, 0.2, 8);
         const beltMat = new THREE.MeshStandardMaterial({
           map: this.treadmillTex,
           roughness: 0.3
         });
         this.beltMesh = new THREE.Mesh(beltGeo, beltMat);
-        this.beltMesh.position.y = 0.05;
+        this.beltMesh.position.y = 0.1;
         this.beltMesh.receiveShadow = true;
         treadmillGroup.add(this.beltMesh);
 
-        const railGeo = new THREE.BoxGeometry(0.4, 0.4, 14.4);
-        const railMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, metalness: 0.8 });
+        const railGeo = new THREE.BoxGeometry(0.4, 0.6, 8.4);
+        const railMat = new THREE.MeshStandardMaterial({ color: 0x00ff66, metalness: 0.8 });
 
         const railL = new THREE.Mesh(railGeo, railMat);
-        railL.position.set(-3.2, 0.2, 0);
+        railL.position.set(-4.2, 0.3, 0);
         treadmillGroup.add(railL);
 
         const railR = new THREE.Mesh(railGeo, railMat);
-        railR.position.set(3.2, 0.2, 0);
+        railR.position.set(4.2, 0.3, 0);
         treadmillGroup.add(railR);
 
+        this.treadmillWorldPos = new THREE.Vector3(0, 0, CONFIG.SAFE_BASE_Z + 16);
         this.group.add(treadmillGroup);
       }
 
       updateTreadmill(delta) {
         if (this.treadmillTex) {
-          this.treadmillTex.offset.y += delta * 0.5;
+          this.treadmillTex.offset.y += delta * 1.5;
         }
       }
 
@@ -730,7 +737,7 @@
           [-9, 6], [0, 8], [9, 6]
         ];
 
-        podPositions.forEach(([x, z], idx) => {
+        podPositions.forEach(([x, z]) => {
           const podGroup = new THREE.Group();
           podGroup.position.set(x, 0.6, z);
 
@@ -744,11 +751,6 @@
           const dome = new THREE.Mesh(domeGeo, glassMat);
           dome.position.y = 2.55;
           podGroup.add(dome);
-
-          const topGeo = new THREE.CylinderGeometry(2, 1.8, 0.4, 24);
-          const topCap = new THREE.Mesh(topGeo, podMat);
-          topCap.position.y = 4.5;
-          podGroup.add(topCap);
 
           const ringGeo = new THREE.RingGeometry(1.2, 1.6, 24);
           const ringMat = new THREE.MeshBasicMaterial({ color: 0xff3300, side: THREE.DoubleSide });
@@ -812,29 +814,7 @@
     const nestPlatform = new THREE.Mesh(nestGeo, nestMat);
     nestPlatform.receiveShadow = true;
     nestGroup.add(nestPlatform);
-
     scene.add(nestGroup);
-
-    const pillarGridGroup = new THREE.Group();
-    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) {
-      const radius = 105;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
-
-      const pGeo = new THREE.CylinderGeometry(1.5, 2, 12, 12);
-      const pMat = new THREE.MeshStandardMaterial({ color: 0x1a202c, roughness: 0.5 });
-      const pMesh = new THREE.Mesh(pGeo, pMat);
-      pMesh.position.set(x, 6, z);
-      pMesh.castShadow = true;
-      pillarGridGroup.add(pMesh);
-
-      const topBeaconGeo = new THREE.SphereGeometry(1.2, 12, 12);
-      const topBeaconMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-      const beacon = new THREE.Mesh(topBeaconGeo, topBeaconMat);
-      beacon.position.set(x, 12.5, z);
-      pillarGridGroup.add(beacon);
-    }
-    scene.add(pillarGridGroup);
 
     function createRobloxCharacter() {
       const charGroup = new THREE.Group();
@@ -843,7 +823,6 @@
       const skinMat = new THREE.MeshStandardMaterial({ color: 0xf5cd2f, roughness: 0.4 });
       const torsoMat = new THREE.MeshStandardMaterial({ color: 0x0055ff, roughness: 0.5 });
       const pantsMat = new THREE.MeshStandardMaterial({ color: 0x008822, roughness: 0.5 });
-      const hairMat = new THREE.MeshStandardMaterial({ color: 0x7a3d11, roughness: 0.7 });
       const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture, roughness: 0.4 });
 
       const torsoGeo = new THREE.BoxGeometry(2, 2, 1);
@@ -858,18 +837,6 @@
       head.position.y = 4.125;
       head.castShadow = true;
       charGroup.add(head);
-
-      const hairGroup = new THREE.Group();
-      const stripGeo = new THREE.BoxGeometry(0.3, 0.15, 1.4);
-      for (let i = -2; i <= 2; i++) {
-        const strip = new THREE.Mesh(stripGeo, hairMat);
-        strip.position.set(i * 0.25, 4.8, 0.05);
-        strip.rotation.z = i * -0.08;
-        strip.rotation.x = 0.1;
-        strip.castShadow = true;
-        hairGroup.add(strip);
-      }
-      charGroup.add(hairGroup);
 
       const armGeo = new THREE.BoxGeometry(1, 2, 1);
       const leftArm = new THREE.Mesh(armGeo, skinMat);
@@ -926,7 +893,6 @@
     rightEye.position.set(0.9, 0.6, 1.5);
     snakeHead.add(rightEye);
 
-    // Snake starts completely still in a curled stance
     for (let i = 0; i < CONFIG.SNAKE_SEGMENTS; i++) {
       const radius = 2.0 * (1 - (i / CONFIG.SNAKE_SEGMENTS) * 0.6);
       const segGeo = new THREE.SphereGeometry(radius, 12, 12);
@@ -962,14 +928,12 @@
     worldEgg.position.copy(eggHomePos);
     scene.add(worldEgg);
 
-    const nestLight = new THREE.PointLight(0xffaa00, 2.5, 20);
-    nestLight.position.copy(eggHomePos);
-    scene.add(nestLight);
-
     let hasEgg = false;
     let isDead = false;
     let yVelocity = 0;
+    let zVelocity = 0;
     let isGrounded = true;
+    let canGainTreadmillSpeed = true;
 
     let cameraPitch = 0.25;
     let cameraYaw = 0;
@@ -1006,6 +970,9 @@
     function respawnPlayer() {
       isDead = false;
       hasEgg = false;
+      playerBonusSpeed = 0;
+      updateSpeedDisplay();
+
       player.group.position.set(0, 0, CONFIG.SAFE_BASE_Z);
 
       worldEgg.position.copy(eggHomePos);
@@ -1013,8 +980,13 @@
       scene.add(worldEgg);
 
       document.getElementById('overlay-screen').classList.remove('active');
-      document.getElementById('objective-text').innerText = "Steal an egg from the sleeping snake nest!";
+      document.getElementById('objective-text').innerText = "Step on the front treadmill to gain speed!";
       document.body.requestPointerLock();
+    }
+
+    function updateSpeedDisplay() {
+      const currentSpeed = CONFIG.BASE_WALK_SPEED + playerBonusSpeed;
+      document.getElementById('speed-val').innerText = currentSpeed;
     }
 
     function attemptEggDeposit() {
@@ -1034,7 +1006,6 @@
           document.getElementById('score-val').innerText = `${total} / ${CONFIG.MAX_PODS}`;
 
           if (total >= CONFIG.MAX_PODS) {
-            audioFX.playVictory();
             document.getElementById('objective-text').innerText = "VICTORY! ALL BASE PODS FILLED!";
             showNotification("CONGRATULATIONS! Base completely filled!");
           } else {
@@ -1063,20 +1034,39 @@
 
       if (!isDead) {
         const playerPos = player.group.position;
+        const totalWalkSpeed = CONFIG.BASE_WALK_SPEED + playerBonusSpeed;
 
-        // --- 1. TREADMILL APPLIED FORCE ---
-        const localBasePos = playerBase.group.position;
-        const onTreadmill = Math.abs(playerPos.x - localBasePos.x) < 3.0 &&
-                            Math.abs(playerPos.z - (localBasePos.z + 0.6)) < 7.0 &&
-                            playerPos.y <= 0.2;
+        // --- 1. TREADMILL LOGIC (IN FRONT OF BASE) ---
+        playerBase.updateTreadmill(delta);
+        const treadPos = playerBase.treadmillWorldPos;
+        const distToTread = Math.abs(playerPos.x - treadPos.x) < 4.0 &&
+                            Math.abs(playerPos.z - treadPos.z) < 4.0;
 
-        if (onTreadmill) {
-          playerPos.z -= CONFIG.TREADMILL_SPEED * delta;
-          playerBase.updateTreadmill(delta);
+        if (distToTread && playerPos.y <= 0.2) {
+          if (canGainTreadmillSpeed) {
+            playerBonusSpeed += 1;
+            updateSpeedDisplay();
+            audioFX.playSpeedBoost();
+            showNotification("+1 SPEED GAINED!");
+
+            // Jump and knock player backwards off treadmill
+            yVelocity = CONFIG.JUMP_FORCE * 1.1;
+            zVelocity = 18; // Force launch off treadmill
+            isGrounded = false;
+            canGainTreadmillSpeed = false;
+          }
+        } else if (!distToTread) {
+          canGainTreadmillSpeed = true;
         }
 
-        // --- 2. PLAYER MOVEMENT (CONSTANT SPEED) ---
-        const moveSpeed = CONFIG.WALK_SPEED * delta;
+        // Apply knockback/launch physics inertia
+        if (zVelocity > 0) {
+          playerPos.z += zVelocity * delta;
+          zVelocity = Math.max(0, zVelocity - delta * 40);
+        }
+
+        // --- 2. PLAYER MOVEMENT ---
+        const moveSpeed = totalWalkSpeed * delta;
 
         const moveDir = new THREE.Vector3();
         if (keys['KeyW']) moveDir.z -= 1;
@@ -1094,7 +1084,7 @@
           const targetAngle = Math.atan2(moveDir.x, moveDir.z);
           player.group.rotation.y = targetAngle;
 
-          const limbAngle = Math.sin(animTimer * 12) * 0.75;
+          const limbAngle = Math.sin(animTimer * (10 + playerBonusSpeed * 0.3)) * 0.75;
           player.leftLeg.rotation.x = limbAngle;
           player.rightLeg.rotation.x = -limbAngle;
           player.leftArm.rotation.x = -limbAngle;
@@ -1160,7 +1150,7 @@
           worldEgg.rotation.y += delta * 0.6;
         }
 
-        // --- 5. SNAKE AI (STANDS STILL UNTIL EGG TAKEN) ---
+        // --- 5. SNAKE AI (CHASES ONLY AFTER EGG IS TAKEN) ---
         if (hasEgg) {
           snakeTimer += delta * 2;
           const headPos = snakeHead.position;

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Steal an Egg 3D - Front Treadmill Speed Edition</title>
+  <title>Steal an Egg 3D - Treadmill Hold Edition</title>
   <style>
     * {
       box-sizing: border-box;
@@ -269,15 +269,15 @@
 
       <div class="card objective-card">
         <div class="objective-title">Current Mission</div>
-        <div id="objective-text" class="objective-desc">Step on the front treadmill to gain speed!</div>
+        <div id="objective-text" class="objective-desc">Step on the treadmill to train speed! Jump to exit!</div>
       </div>
     </div>
 
     <div class="card controls-card">
       <div><span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span> : Move</div>
-      <div><span class="key">SPACE</span> : Jump</div>
-      <div><span class="key">E</span> : Store Egg inside Base</div>
-      <div><span class="key">TREADMILL</span> : Adds +1 Speed & Launches You</div>
+      <div><span class="key">SPACE</span> : Jump / Jump off Treadmill</div>
+      <div><span class="key">E</span> : Store Egg in Base</div>
+      <div><span class="key">TREADMILL</span> : Stay on to stack +1 Speed</div>
     </div>
 
     <div id="notification-feed"></div>
@@ -304,6 +304,8 @@
     };
 
     let playerBonusSpeed = 0;
+    let isOnTreadmill = false;
+    let treadmillTimer = 0;
 
     class TextureFactory {
       static createGrass() {
@@ -687,7 +689,6 @@
 
       buildFrontTreadmill() {
         const treadmillGroup = new THREE.Group();
-        // Placed directly in front of the base (positive Z relative to base)
         treadmillGroup.position.set(0, 0.1, 16);
 
         const beltGeo = new THREE.BoxGeometry(8, 0.2, 8);
@@ -717,7 +718,7 @@
 
       updateTreadmill(delta) {
         if (this.treadmillTex) {
-          this.treadmillTex.offset.y += delta * 1.5;
+          this.treadmillTex.offset.y += delta * (isOnTreadmill ? 4.0 : 1.0);
         }
       }
 
@@ -931,9 +932,7 @@
     let hasEgg = false;
     let isDead = false;
     let yVelocity = 0;
-    let zVelocity = 0;
     let isGrounded = true;
-    let canGainTreadmillSpeed = true;
 
     let cameraPitch = 0.25;
     let cameraYaw = 0;
@@ -970,6 +969,7 @@
     function respawnPlayer() {
       isDead = false;
       hasEgg = false;
+      isOnTreadmill = false;
       playerBonusSpeed = 0;
       updateSpeedDisplay();
 
@@ -980,7 +980,7 @@
       scene.add(worldEgg);
 
       document.getElementById('overlay-screen').classList.remove('active');
-      document.getElementById('objective-text').innerText = "Step on the front treadmill to gain speed!";
+      document.getElementById('objective-text').innerText = "Step on the treadmill to train speed! Jump to exit!";
       document.body.requestPointerLock();
     }
 
@@ -1036,90 +1036,109 @@
         const playerPos = player.group.position;
         const totalWalkSpeed = CONFIG.BASE_WALK_SPEED + playerBonusSpeed;
 
-        // --- 1. TREADMILL LOGIC (IN FRONT OF BASE) ---
         playerBase.updateTreadmill(delta);
         const treadPos = playerBase.treadmillWorldPos;
-        const distToTread = Math.abs(playerPos.x - treadPos.x) < 4.0 &&
-                            Math.abs(playerPos.z - treadPos.z) < 4.0;
 
-        if (distToTread && playerPos.y <= 0.2) {
-          if (canGainTreadmillSpeed) {
+        // Check if player steps on treadmill
+        const distToTread = Math.abs(playerPos.x - treadPos.x) < 3.5 &&
+                            Math.abs(playerPos.z - treadPos.z) < 3.5;
+
+        if (distToTread && !isOnTreadmill && isGrounded) {
+          isOnTreadmill = true;
+          showNotification("ON TREADMILL: Sprinting! Press SPACE to jump off!");
+        }
+
+        // --- TREADMILL RUNNING STATE ---
+        if (isOnTreadmill) {
+          // Lock player to the center of the treadmill while running
+          playerPos.x = treadPos.x;
+          playerPos.z = treadPos.z;
+          playerPos.y = 0.2;
+          player.group.rotation.y = Math.PI; // Face forward on belt
+
+          // Accumulate speed bonus over time while staying on
+          treadmillTimer += delta;
+          if (treadmillTimer >= 1.0) {
+            treadmillTimer = 0;
             playerBonusSpeed += 1;
             updateSpeedDisplay();
             audioFX.playSpeedBoost();
-            showNotification("+1 SPEED GAINED!");
-
-            // Jump and knock player backwards off treadmill
-            yVelocity = CONFIG.JUMP_FORCE * 1.1;
-            zVelocity = 18; // Force launch off treadmill
-            isGrounded = false;
-            canGainTreadmillSpeed = false;
+            showNotification("+1 SPEED!");
           }
-        } else if (!distToTread) {
-          canGainTreadmillSpeed = true;
-        }
 
-        // Apply knockback/launch physics inertia
-        if (zVelocity > 0) {
-          playerPos.z += zVelocity * delta;
-          zVelocity = Math.max(0, zVelocity - delta * 40);
-        }
-
-        // --- 2. PLAYER MOVEMENT ---
-        const moveSpeed = totalWalkSpeed * delta;
-
-        const moveDir = new THREE.Vector3();
-        if (keys['KeyW']) moveDir.z -= 1;
-        if (keys['KeyS']) moveDir.z += 1;
-        if (keys['KeyA']) moveDir.x -= 1;
-        if (keys['KeyD']) moveDir.x += 1;
-
-        moveDir.normalize();
-        moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
-
-        if (moveDir.length() > 0) {
-          playerPos.x += moveDir.x * moveSpeed;
-          playerPos.z += moveDir.z * moveSpeed;
-
-          const targetAngle = Math.atan2(moveDir.x, moveDir.z);
-          player.group.rotation.y = targetAngle;
-
-          const limbAngle = Math.sin(animTimer * (10 + playerBonusSpeed * 0.3)) * 0.75;
+          // Animated running legs while staying in place
+          const limbAngle = Math.sin(animTimer * 18) * 0.8;
           player.leftLeg.rotation.x = limbAngle;
           player.rightLeg.rotation.x = -limbAngle;
           player.leftArm.rotation.x = -limbAngle;
           player.rightArm.rotation.x = limbAngle;
 
-          stepTimer += delta * 10;
-          if (stepTimer > Math.PI) {
-            stepTimer = 0;
-            if (isGrounded) audioFX.playStep();
+          // JUMP OFF TREADMILL LOGIC
+          if (keys['Space']) {
+            isOnTreadmill = false;
+            yVelocity = CONFIG.JUMP_FORCE * 1.1;
+            playerPos.z += 3.0; // Jump off forwards
+            isGrounded = false;
+            showNotification("Jumped off treadmill!");
           }
-        } else {
-          player.leftLeg.rotation.x = 0;
-          player.rightLeg.rotation.x = 0;
-          player.leftArm.rotation.x = 0;
-          player.rightArm.rotation.x = 0;
+        } 
+        // --- NORMAL FREE MOVEMENT STATE ---
+        else {
+          const moveSpeed = totalWalkSpeed * delta;
+          const moveDir = new THREE.Vector3();
+
+          if (keys['KeyW']) moveDir.z -= 1;
+          if (keys['KeyS']) moveDir.z += 1;
+          if (keys['KeyA']) moveDir.x -= 1;
+          if (keys['KeyD']) moveDir.x += 1;
+
+          moveDir.normalize();
+          moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
+
+          if (moveDir.length() > 0) {
+            playerPos.x += moveDir.x * moveSpeed;
+            playerPos.z += moveDir.z * moveSpeed;
+
+            const targetAngle = Math.atan2(moveDir.x, moveDir.z);
+            player.group.rotation.y = targetAngle;
+
+            const limbAngle = Math.sin(animTimer * (10 + playerBonusSpeed * 0.3)) * 0.75;
+            player.leftLeg.rotation.x = limbAngle;
+            player.rightLeg.rotation.x = -limbAngle;
+            player.leftArm.rotation.x = -limbAngle;
+            player.rightArm.rotation.x = limbAngle;
+
+            stepTimer += delta * 10;
+            if (stepTimer > Math.PI) {
+              stepTimer = 0;
+              if (isGrounded) audioFX.playStep();
+            }
+          } else {
+            player.leftLeg.rotation.x = 0;
+            player.rightLeg.rotation.x = 0;
+            player.leftArm.rotation.x = 0;
+            player.rightArm.rotation.x = 0;
+          }
+
+          if (keys['Space'] && isGrounded) {
+            yVelocity = CONFIG.JUMP_FORCE;
+            isGrounded = false;
+          }
+
+          yVelocity -= CONFIG.GRAVITY * delta;
+          playerPos.y += yVelocity * delta;
+
+          if (playerPos.y <= 0) {
+            playerPos.y = 0;
+            yVelocity = 0;
+            isGrounded = true;
+          }
+
+          playerPos.x = Math.max(-100, Math.min(100, playerPos.x));
+          playerPos.z = Math.max(-100, Math.min(100, playerPos.z));
         }
 
-        if (keys['Space'] && isGrounded) {
-          yVelocity = CONFIG.JUMP_FORCE;
-          isGrounded = false;
-        }
-
-        yVelocity -= CONFIG.GRAVITY * delta;
-        playerPos.y += yVelocity * delta;
-
-        if (playerPos.y <= 0) {
-          playerPos.y = 0;
-          yVelocity = 0;
-          isGrounded = true;
-        }
-
-        playerPos.x = Math.max(-100, Math.min(100, playerPos.x));
-        playerPos.z = Math.max(-100, Math.min(100, playerPos.z));
-
-        // --- 3. CAMERA ---
+        // --- CAMERA ---
         const camX = playerPos.x + Math.sin(cameraYaw) * Math.cos(cameraPitch) * CONFIG.CAMERA_DISTANCE;
         const camY = playerPos.y + 3.5 + Math.sin(cameraPitch) * CONFIG.CAMERA_DISTANCE;
         const camZ = playerPos.z + Math.cos(cameraYaw) * Math.cos(cameraPitch) * CONFIG.CAMERA_DISTANCE;
@@ -1127,7 +1146,7 @@
         camera.position.set(camX, camY, camZ);
         camera.lookAt(playerPos.x, playerPos.y + 3.5, playerPos.z);
 
-        // --- 4. EGG PICKUP & CARRYING ---
+        // --- EGG PICKUP & CARRYING ---
         const distToNestEgg = playerPos.distanceTo(worldEgg.position);
 
         if (!hasEgg && distToNestEgg < 3.8 && playerBase.storedEggsCount < CONFIG.MAX_PODS) {
@@ -1150,7 +1169,7 @@
           worldEgg.rotation.y += delta * 0.6;
         }
 
-        // --- 5. SNAKE AI (CHASES ONLY AFTER EGG IS TAKEN) ---
+        // --- SNAKE AI ---
         if (hasEgg) {
           snakeTimer += delta * 2;
           const headPos = snakeHead.position;

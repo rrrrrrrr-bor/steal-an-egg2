@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Steal an Egg 3D - Treadmill Hold Edition</title>
+  <title>Steal an Egg 3D - Hold Right-Click Camera</title>
   <style>
     * {
       box-sizing: border-box;
@@ -120,7 +120,7 @@
       left: 24px;
       font-size: 13px;
       line-height: 1.8;
-      width: 300px;
+      width: 320px;
     }
 
     .key {
@@ -202,19 +202,6 @@
       border-bottom-width: 2px;
     }
 
-    #crosshair {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 6px;
-      height: 6px;
-      background: rgba(255, 255, 255, 0.7);
-      border: 2px solid rgba(0, 0, 0, 0.6);
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-    }
-
     #notification-feed {
       position: absolute;
       top: 120px;
@@ -251,7 +238,6 @@
 <body>
 
   <div id="canvas-container"></div>
-  <div id="crosshair"></div>
 
   <div id="ui-layer">
     <div class="hud-top">
@@ -269,15 +255,15 @@
 
       <div class="card objective-card">
         <div class="objective-title">Current Mission</div>
-        <div id="objective-text" class="objective-desc">Step on the treadmill to train speed! Jump to exit!</div>
+        <div id="objective-text" class="objective-desc">Step on treadmill to train! Jump to exit!</div>
       </div>
     </div>
 
     <div class="card controls-card">
       <div><span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span> : Move</div>
-      <div><span class="key">SPACE</span> : Jump / Jump off Treadmill</div>
+      <div><span class="key">HOLD RMB</span> : Rotate Camera</div>
+      <div><span class="key">SPACE</span> : Jump / Exit Treadmill</div>
       <div><span class="key">E</span> : Store Egg in Base</div>
-      <div><span class="key">TREADMILL</span> : Stay on to stack +1 Speed</div>
     </div>
 
     <div id="notification-feed"></div>
@@ -306,6 +292,8 @@
     let playerBonusSpeed = 0;
     let isOnTreadmill = false;
     let treadmillTimer = 0;
+    let isRightMouseDown = false;
+    let previousMousePosition = { x: 0, y: 0 };
 
     class TextureFactory {
       static createGrass() {
@@ -950,17 +938,33 @@
       keys[e.code] = false;
     });
 
-    document.body.addEventListener('click', () => {
-      if (!isDead) {
-        document.body.requestPointerLock();
+    // Disable default context menu so right clicking doesn't pop up a menu
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Hold right-click camera drag handlers
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 2) {
+        isRightMouseDown = true;
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 2) {
+        isRightMouseDown = false;
       }
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement === document.body) {
-        cameraYaw -= e.movementX * 0.003;
-        cameraPitch -= e.movementY * 0.003;
+      if (isRightMouseDown && !isDead) {
+        const deltaX = e.clientX - previousMousePosition.x;
+        const deltaY = e.clientY - previousMousePosition.y;
+
+        cameraYaw -= deltaX * 0.005;
+        cameraPitch -= deltaY * 0.005;
         cameraPitch = Math.max(-0.2, Math.min(1.2, cameraPitch));
+
+        previousMousePosition = { x: e.clientX, y: e.clientY };
       }
     });
 
@@ -980,8 +984,7 @@
       scene.add(worldEgg);
 
       document.getElementById('overlay-screen').classList.remove('active');
-      document.getElementById('objective-text').innerText = "Step on the treadmill to train speed! Jump to exit!";
-      document.body.requestPointerLock();
+      document.getElementById('objective-text').innerText = "Step on treadmill to train! Jump to exit!";
     }
 
     function updateSpeedDisplay() {
@@ -1039,7 +1042,7 @@
         playerBase.updateTreadmill(delta);
         const treadPos = playerBase.treadmillWorldPos;
 
-        // Check if player steps on treadmill
+        // Treadmill detection
         const distToTread = Math.abs(playerPos.x - treadPos.x) < 3.5 &&
                             Math.abs(playerPos.z - treadPos.z) < 3.5;
 
@@ -1048,15 +1051,13 @@
           showNotification("ON TREADMILL: Sprinting! Press SPACE to jump off!");
         }
 
-        // --- TREADMILL RUNNING STATE ---
+        // TREADMILL LOGIC
         if (isOnTreadmill) {
-          // Lock player to the center of the treadmill while running
           playerPos.x = treadPos.x;
           playerPos.z = treadPos.z;
           playerPos.y = 0.2;
-          player.group.rotation.y = Math.PI; // Face forward on belt
+          player.group.rotation.y = Math.PI;
 
-          // Accumulate speed bonus over time while staying on
           treadmillTimer += delta;
           if (treadmillTimer >= 1.0) {
             treadmillTimer = 0;
@@ -1066,23 +1067,21 @@
             showNotification("+1 SPEED!");
           }
 
-          // Animated running legs while staying in place
           const limbAngle = Math.sin(animTimer * 18) * 0.8;
           player.leftLeg.rotation.x = limbAngle;
           player.rightLeg.rotation.x = -limbAngle;
           player.leftArm.rotation.x = -limbAngle;
           player.rightArm.rotation.x = limbAngle;
 
-          // JUMP OFF TREADMILL LOGIC
           if (keys['Space']) {
             isOnTreadmill = false;
             yVelocity = CONFIG.JUMP_FORCE * 1.1;
-            playerPos.z += 3.0; // Jump off forwards
+            playerPos.z += 3.0;
             isGrounded = false;
             showNotification("Jumped off treadmill!");
           }
         } 
-        // --- NORMAL FREE MOVEMENT STATE ---
+        // FREE MOVEMENT LOGIC
         else {
           const moveSpeed = totalWalkSpeed * delta;
           const moveDir = new THREE.Vector3();
@@ -1138,7 +1137,7 @@
           playerPos.z = Math.max(-100, Math.min(100, playerPos.z));
         }
 
-        // --- CAMERA ---
+        // CAMERA UPDATE
         const camX = playerPos.x + Math.sin(cameraYaw) * Math.cos(cameraPitch) * CONFIG.CAMERA_DISTANCE;
         const camY = playerPos.y + 3.5 + Math.sin(cameraPitch) * CONFIG.CAMERA_DISTANCE;
         const camZ = playerPos.z + Math.cos(cameraYaw) * Math.cos(cameraPitch) * CONFIG.CAMERA_DISTANCE;
@@ -1146,7 +1145,7 @@
         camera.position.set(camX, camY, camZ);
         camera.lookAt(playerPos.x, playerPos.y + 3.5, playerPos.z);
 
-        // --- EGG PICKUP & CARRYING ---
+        // EGG STEAL
         const distToNestEgg = playerPos.distanceTo(worldEgg.position);
 
         if (!hasEgg && distToNestEgg < 3.8 && playerBase.storedEggsCount < CONFIG.MAX_PODS) {
@@ -1169,7 +1168,7 @@
           worldEgg.rotation.y += delta * 0.6;
         }
 
-        // --- SNAKE AI ---
+        // SNAKE CHASE
         if (hasEgg) {
           snakeTimer += delta * 2;
           const headPos = snakeHead.position;
@@ -1201,7 +1200,6 @@
 
           if (playerPos.distanceTo(snakeHead.position) < 3.4) {
             isDead = true;
-            document.exitPointerLock();
             document.getElementById('overlay-screen').classList.add('active');
           }
         }

@@ -2,1260 +2,947 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Shadows of the Infected - Retro Zombie Horror</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Labyrinth of Shadows - 3D Horror Experience</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Creepster&family=Share+Tech+Mono&display=swap');
-
-        body {
-            background-color: #050505;
-            color: #d1d5db;
-            font-family: 'Share Tech Mono', monospace;
-            user-select: none;
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
-            touch-action: none;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
         }
 
-        .horror-font {
-            font-family: 'Creepster', cursive;
+        #game-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
         }
 
-        /* Scanline effect for retro aesthetic */
-        .scanline {
+        /* Screen shake animation for jumpscares */
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-4px, 0, 0) rotate(-1deg); }
+            20%, 80% { transform: translate3d(6px, 0, 0) rotate(2deg); }
+            30%, 50%, 70% { transform: translate3d(-8px, 0, 0) rotate(-2deg); }
+            40%, 60% { transform: translate3d(8px, 0, 0) rotate(1deg); }
+        }
+
+        /* Scanline effect overlay */
+        .scanlines {
             background: linear-gradient(
-                to bottom,
-                rgba(255,255,255,0),
-                rgba(255,255,255,0) 50%,
-                rgba(0, 0, 0, 0.3) 50%,
-                rgba(0, 0, 0, 0.3)
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.25) 50%
+            ), linear-gradient(
+                90deg,
+                rgba(255, 0, 0, 0.03),
+                rgba(0, 255, 0, 0.01),
+                rgba(0, 0, 255, 0.03)
             );
-            background-size: 100% 4px;
-        }
-
-        .vignette {
-            box-shadow: inset 0 0 100px rgba(0,0,0,0.9);
-        }
-
-        /* Custom Scrollbars */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #111;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #800;
-        }
-
-        canvas {
-            image-rendering: pixelated;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
         }
     </style>
 </head>
-<body class="w-screen h-screen flex flex-col justify-center items-center relative overflow-hidden bg-black select-none">
+<body class="relative text-white flex items-center justify-center">
 
-    <!-- MAIN CANVAS CONTAINER -->
-    <div id="gameContainer" class="relative w-full h-full flex items-center justify-center">
-        <canvas id="gameCanvas" class="w-full h-full block bg-neutral-950"></canvas>
-        
-        <!-- Scanline Overlay -->
-        <div class="pointer-events-none absolute inset-0 scanline opacity-40 z-10"></div>
-        <div class="pointer-events-none absolute inset-0 vignette z-10"></div>
+    <!-- Game Canvas -->
+    <canvas id="game-canvas"></canvas>
 
-        <!-- IN-GAME HUD -->
-        <div id="hud" class="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-4 hidden">
-            <!-- Top HUD Bar -->
-            <div class="flex justify-between items-start w-full">
-                <!-- Health, Battery & Ammo -->
-                <div class="bg-black/80 border border-red-900/60 p-3 rounded-lg backdrop-blur-sm space-y-2 w-64 pointer-events-auto">
-                    <!-- Health -->
-                    <div>
-                        <div class="flex justify-between text-xs text-red-500 font-bold mb-1">
-                            <span><i class="fa-solid fa-heart mr-1">开拓</i> VITAL SIGNS</span>
-                            <span id="healthText">100 HP</span>
-                        </div>
-                        <div class="w-full bg-red-950 rounded-full h-2.5 overflow-hidden border border-red-800">
-                            <div id="healthBar" class="bg-gradient-to-r from-red-700 to-red-500 h-2.5 rounded-full transition-all duration-200" style="width: 100%"></div>
-                        </div>
-                    </div>
+    <!-- CRT Visual Overlay Filter -->
+    <div class="scanlines absolute inset-0 z-10 pointer-events-none"></div>
 
-                    <!-- Stamina -->
-                    <div>
-                        <div class="flex justify-between text-xs text-amber-500 font-bold mb-1">
-                            <span><i class="fa-solid fa-bolt mr-1"></i> STAMINA</span>
-                            <span id="staminaText">100%</span>
-                        </div>
-                        <div class="w-full bg-amber-950 rounded-full h-1.5 overflow-hidden border border-amber-800">
-                            <div id="staminaBar" class="bg-amber-500 h-1.5 rounded-full transition-all duration-100" style="width: 100%"></div>
-                        </div>
-                    </div>
+    <!-- Vignette / Darkness Effect -->
+    <div class="absolute inset-0 z-10 pointer-events-none" style="background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.85) 90%);"></div>
 
-                    <!-- Flashlight Battery -->
-                    <div>
-                        <div class="flex justify-between text-xs text-cyan-400 font-bold mb-1">
-                            <span><i class="fa-solid fa-flashlight mr-1"></i> BATTERY [F]</span>
-                            <span id="batteryText">100%</span>
-                        </div>
-                        <div class="w-full bg-cyan-950 rounded-full h-1.5 overflow-hidden border border-cyan-800">
-                            <div id="batteryBar" class="bg-cyan-400 h-1.5 rounded-full transition-all duration-200" style="width: 100%"></div>
-                        </div>
-                    </div>
-                </div>
+    <!-- Red Damage Flash Overlay -->
+    <div id="damage-overlay" class="absolute inset-0 bg-red-900 opacity-0 z-20 pointer-events-none transition-opacity duration-200"></div>
 
-                <!-- Current Objective & Chapter Info -->
-                <div class="bg-black/80 border border-amber-900/60 p-3 rounded-lg backdrop-blur-sm max-w-xs text-right pointer-events-auto">
-                    <div id="chapterTitle" class="text-xs text-amber-500 font-bold tracking-widest uppercase mb-1">CHAPTER 1: SURVIVE THE NIGHT</div>
-                    <div id="objectiveText" class="text-sm text-neutral-200 font-medium">Find the generator key inside the maintenance shack.</div>
-                    <div id="waveInfo" class="text-xs text-red-400 font-mono mt-1 hidden">ZOMBIE WAVE: <span id="waveNum">1</span></div>
-                </div>
+    <!-- Jumpscare Overlay -->
+    <div id="jumpscare-container" class="absolute inset-0 z-50 bg-black hidden flex items-center justify-center overflow-hidden">
+        <svg id="monster-face" class="w-full h-full text-red-700 animate-ping" viewBox="0 0 100 100" fill="currentColor">
+            <circle cx="50" cy="50" r="45" fill="black" stroke="#800000" stroke-width="4"/>
+            <path d="M 20 35 Q 35 10 45 35 Z" fill="#800000"/>
+            <path d="M 80 35 Q 65 10 55 35 Z" fill="#800000"/>
+            <circle cx="35" cy="40" r="8" fill="#ff0000"/>
+            <circle cx="65" cy="40" r="8" fill="#ff0000"/>
+            <circle cx="35" cy="40" r="3" fill="#ffffff"/>
+            <circle cx="65" cy="40" r="3" fill="#ffffff"/>
+            <path d="M 25 65 Q 50 95 75 65 Q 50 75 25 65 Z" fill="#4a0000"/>
+            <polygon points="30,66 35,75 40,66" fill="white"/>
+            <polygon points="45,67 50,80 55,67" fill="white"/>
+            <polygon points="60,66 65,75 70,66" fill="white"/>
+        </svg>
+    </div>
+
+    <!-- Game HUD Layer -->
+    <div id="hud" class="absolute inset-0 z-20 flex flex-col justify-between p-6 pointer-events-none hidden">
+        <!-- Top Stats Bar -->
+        <div class="flex justify-between items-start">
+            <div class="bg-black/60 border border-gray-800 p-3 rounded backdrop-blur max-w-xs">
+                <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">Objective</div>
+                <div id="objective-text" class="text-sm font-semibold text-red-500">Collect Cursed Artifacts (0/5)</div>
             </div>
-
-            <!-- Bottom HUD Bar -->
-            <div class="flex justify-between items-end w-full">
-                <!-- Weapon & Ammo Display -->
-                <div class="bg-black/80 border border-neutral-800 p-3 rounded-lg backdrop-blur-sm flex items-center space-x-4 pointer-events-auto">
-                    <div id="weaponIcon" class="text-3xl text-red-600 w-12 text-center">
-                        <i class="fa-solid fa-gun"></i>
-                    </div>
-                    <div>
-                        <div id="weaponName" class="text-xs text-neutral-400 uppercase tracking-widest font-bold">PISTOL</div>
-                        <div class="text-2xl font-black tracking-widest text-white">
-                            <span id="ammoClip">12</span> / <span id="ammoReserve" class="text-neutral-500 text-lg">48</span>
-                        </div>
-                    </div>
-                    <div class="text-xs text-neutral-500 border-l border-neutral-800 pl-3">
-                        <div>[1] Pistol</div>
-                        <div>[2] Shotgun</div>
-                        <div>[3] Rifle</div>
-                        <div>[R] Reload</div>
-                    </div>
-                </div>
-
-                <!-- Radar/Minimap -->
-                <div class="relative w-28 h-28 bg-black/90 border-2 border-green-900/80 rounded-full overflow-hidden shadow-lg shadow-green-950/50 pointer-events-auto">
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <div class="w-full h-[1px] bg-green-900/50"></div>
-                        <div class="h-full w-[1px] bg-green-900/50"></div>
-                    </div>
-                    <canvas id="radarCanvas" class="w-full h-full relative z-10"></canvas>
-                </div>
+            
+            <div class="bg-black/60 border border-gray-800 p-3 rounded backdrop-blur text-right">
+                <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">Status</div>
+                <div id="status-text" class="text-xs text-green-400 font-mono">NORMAL</div>
             </div>
         </div>
 
-        <!-- DIALOG / STORY CUTSCENE OVERLAY -->
-        <div id="storyOverlay" class="absolute inset-x-0 bottom-10 mx-auto max-w-2xl bg-black/95 border-2 border-red-900/80 p-6 rounded-lg backdrop-blur-md shadow-2xl z-30 hidden">
-            <div class="flex items-start space-x-4">
-                <div id="speakerAvatar" class="w-16 h-16 bg-red-950 border border-red-800 rounded-lg flex items-center justify-center text-3xl text-red-500 shrink-0">
-                    <i class="fa-solid fa-user-ninja"></i>
-                </div>
-                <div class="flex-1">
-                    <h3 id="speakerName" class="text-red-500 text-sm font-bold tracking-wider uppercase mb-1">SURVIVOR</h3>
-                    <p id="dialogText" class="text-neutral-300 text-sm leading-relaxed mb-4 font-mono">
-                        "The power grid is completely dead. Find the fuel cell in the dark shed before they swarm us..."
-                    </p>
-                    <button id="btnContinueStory" class="float-right px-4 py-1.5 bg-red-900 hover:bg-red-800 text-white text-xs font-bold rounded tracking-wider border border-red-700 transition">
-                        CONTINUE [SPACE]
-                    </button>
-                </div>
+        <!-- Crosshair & Action Prompts -->
+        <div class="flex flex-col items-center justify-center text-center">
+            <div class="w-2 h-2 rounded-full bg-white/50 border border-black mb-4"></div>
+            <div id="interact-prompt" class="hidden bg-black/80 text-yellow-400 text-xs px-3 py-1.5 rounded border border-yellow-600/50 uppercase tracking-wider animate-pulse">
+                [E] Pick up Cursed Artifact
             </div>
         </div>
 
-        <!-- MAIN MENU OVERLAY -->
-        <div id="mainMenu" class="absolute inset-0 bg-black/90 backdrop-blur-md z-40 flex flex-col items-center justify-center p-6 text-center">
-            <h1 class="horror-font text-6xl md:text-8xl text-red-600 tracking-wider mb-2 drop-shadow-[0_5px_15px_rgba(220,38,38,0.5)]">
-                SHADOWS OF THE INFECTED
-            </h1>
-            <p class="text-neutral-400 text-sm max-w-md mb-8 tracking-widest uppercase">A Retro Top-Down Tactical Horror Survival Game</p>
-
-            <div class="space-y-4 w-72">
-                <button id="btnStoryMode" class="w-full py-3 bg-gradient-to-r from-red-950 via-red-900 to-red-950 hover:from-red-900 hover:to-red-800 border border-red-700 rounded text-red-100 font-bold tracking-widest transition transform hover:scale-105 shadow-lg shadow-red-950/50">
-                    <i class="fa-solid fa-book-skull mr-2"></i> STORY MODE
-                </button>
-                <button id="btnOnlineMode" class="w-full py-3 bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 hover:from-neutral-800 hover:to-neutral-700 border border-neutral-700 rounded text-neutral-200 font-bold tracking-widest transition transform hover:scale-105">
-                    <i class="fa-solid fa-network-wired mr-2"></i> CO-OP / ONLINE MODE
-                </button>
-                <button id="btnControls" class="w-full py-2 bg-black border border-neutral-800 hover:border-neutral-600 text-neutral-400 text-xs font-bold tracking-widest rounded transition">
-                    CONTROLS & HOW TO PLAY
-                </button>
+        <!-- Bottom Meters -->
+        <div class="flex justify-between items-end gap-4">
+            <!-- Flashlight Bar -->
+            <div class="w-48 bg-black/70 border border-gray-800 p-2 rounded backdrop-blur">
+                <div class="flex justify-between text-xs mb-1 text-gray-300">
+                    <span>FLASHLIGHT [F]</span>
+                    <span id="battery-num">100%</span>
+                </div>
+                <div class="w-full bg-gray-900 h-2 rounded overflow-hidden">
+                    <div id="battery-bar" class="bg-yellow-500 h-full w-full transition-all duration-300"></div>
+                </div>
             </div>
 
-            <!-- Sound toggle button -->
-            <button id="btnSoundToggle" class="mt-8 text-xs text-neutral-500 hover:text-neutral-300 flex items-center space-x-2">
-                <i class="fa-solid fa-volume-high"></i> <span>AUDIO: ENABLED</span>
-            </button>
-        </div>
-
-        <!-- CO-OP / ONLINE LOBBY SIMULATOR -->
-        <div id="lobbyMenu" class="absolute inset-0 bg-black/95 backdrop-blur-md z-40 flex flex-col items-center justify-center p-6 hidden">
-            <div class="max-w-md w-full bg-neutral-950 border border-red-900/60 rounded-xl p-6 shadow-2xl">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold text-red-500 tracking-wider"><i class="fa-solid fa-wifi mr-2"></i> MULTIPLAYER LOBBY</h2>
-                    <button id="btnCloseLobby" class="text-neutral-500 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <!-- Stamina Bar -->
+            <div class="w-48 bg-black/70 border border-gray-800 p-2 rounded backdrop-blur">
+                <div class="flex justify-between text-xs mb-1 text-gray-300">
+                    <span>STAMINA [SHIFT]</span>
                 </div>
-
-                <div class="space-y-4 mb-6">
-                    <div>
-                        <label class="text-xs text-neutral-400 block mb-1">PLAYER NAME</label>
-                        <input type="text" id="playerName" value="Survivor_89" class="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-red-600">
-                    </div>
-
-                    <div class="flex space-x-2">
-                        <div class="flex-1">
-                            <label class="text-xs text-neutral-400 block mb-1">ROOM CODE</label>
-                            <input type="text" id="roomCode" value="OUTBREAK-99" class="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-amber-500 font-mono text-sm uppercase focus:outline-none focus:border-red-600">
-                        </div>
-                        <button id="btnGenRoom" class="mt-5 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold rounded">
-                            GENERATE
-                        </button>
-                    </div>
-
-                    <div class="bg-black/60 rounded border border-neutral-800 p-3">
-                        <span class="text-xs text-neutral-500 block mb-2">CONNECTED TEAMMATES (P2P BOT/NET):</span>
-                        <div id="playerList" class="space-y-2 text-xs">
-                            <div class="flex items-center justify-between text-green-400">
-                                <span><i class="fa-solid fa-user-check mr-2"></i> <span id="localPlayerName">Survivor_89</span> (HOST)</span>
-                                <span class="bg-green-950 border border-green-800 text-green-400 px-1.5 py-0.5 rounded text-[10px]">READY</span>
-                            </div>
-                            <div class="flex items-center justify-between text-cyan-400">
-                                <span><i class="fa-solid fa-robot mr-2"></i> AI_Companion_Alpha (BOT)</span>
-                                <span class="bg-cyan-950 border border-cyan-800 text-cyan-400 px-1.5 py-0.5 rounded text-[10px]">CONNECTED</span>
-                            </div>
-                        </div>
-                    </div>
+                <div class="w-full bg-gray-900 h-2 rounded overflow-hidden">
+                    <div id="stamina-bar" class="bg-blue-500 h-full w-full transition-all duration-100"></div>
                 </div>
-
-                <button id="btnStartCoop" class="w-full py-3 bg-red-900 hover:bg-red-800 text-white font-bold tracking-widest rounded transition">
-                    START CO-OP SURVIVAL
-                </button>
             </div>
-        </div>
-
-        <!-- CONTROLS MODAL -->
-        <div id="controlsModal" class="absolute inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-6 hidden">
-            <div class="max-w-md w-full bg-neutral-950 border border-neutral-800 rounded-xl p-6">
-                <h2 class="text-xl font-bold text-red-500 mb-4 border-b border-neutral-800 pb-2">TACTICAL CONTROLS</h2>
-                <div class="space-y-3 text-xs text-neutral-300 font-mono">
-                    <div class="flex justify-between"><span>MOVE:</span><span class="text-amber-500">WASD or Arrow Keys</span></div>
-                    <div class="flex justify-between"><span>AIM & SHOOT:</span><span class="text-amber-500">Mouse Movement & Left Click</span></div>
-                    <div class="flex justify-between"><span>SPRINT:</span><span class="text-amber-500">Left Shift</span></div>
-                    <div class="flex justify-between"><span>TOGGLE FLASHLIGHT:</span><span class="text-amber-500">F Key</span></div>
-                    <div class="flex justify-between"><span>RELOAD:</span><span class="text-amber-500">R Key</span></div>
-                    <div class="flex justify-between"><span>SWITCH WEAPON:</span><span class="text-amber-500">1, 2, 3 Keys</span></div>
-                    <div class="flex justify-between"><span>INTERACT / REVIVE:</span><span class="text-amber-500">E Key</span></div>
-                </div>
-                <button id="btnCloseControls" class="mt-6 w-full py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs rounded">
-                    BACK TO MENU
-                </button>
-            </div>
-        </div>
-
-        <!-- GAME OVER / VICTORY OVERLAY -->
-        <div id="endOverlay" class="absolute inset-0 bg-black/90 backdrop-blur-md z-40 flex flex-col items-center justify-center p-6 text-center hidden">
-            <h2 id="endTitle" class="horror-font text-6xl text-red-600 mb-2">YOU DIED</h2>
-            <p id="endSubtitle" class="text-neutral-400 text-sm max-w-md mb-6">The horde overwhelmed your position in the dark.</p>
-            <button id="btnRestart" class="px-6 py-3 bg-red-900 hover:bg-red-800 text-white font-bold tracking-widest rounded transition">
-                TRY AGAIN
-            </button>
         </div>
     </div>
 
+    <!-- Start / Pause / Death Overlay Menu -->
+    <div id="menu-overlay" class="absolute inset-0 z-30 bg-black/90 flex flex-col items-center justify-center p-6 text-center">
+        <h1 id="menu-title" class="text-4xl md:text-6xl font-extrabold text-red-700 tracking-widest uppercase mb-2 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)]">
+            Labyrinth of Shadows
+        </h1>
+        <p id="menu-subtitle" class="text-gray-400 max-w-md text-sm mb-8 leading-relaxed">
+            Find all 5 cursed artifacts scattered deep inside the dark labyrinth. Avoid the entity lingering in the shadows. Keep your flashlight charged.
+        </p>
+
+        <div id="controls-guide" class="bg-black/60 border border-red-950/60 p-4 rounded-lg max-w-md text-xs text-gray-300 mb-8 grid grid-cols-2 gap-3 text-left">
+            <div><span class="text-red-500 font-bold">WASD:</span> Move</div>
+            <div><span class="text-red-500 font-bold">MOUSE:</span> Look Around</div>
+            <div><span class="text-red-500 font-bold">SHIFT:</span> Sprint</div>
+            <div><span class="text-red-500 font-bold">F:</span> Toggle Flashlight</div>
+            <div><span class="text-red-500 font-bold">E:</span> Interact / Pickup</div>
+            <div><span class="text-red-500 font-bold">ESC:</span> Pause Game</div>
+        </div>
+
+        <button id="start-btn" class="px-8 py-3 bg-red-900 hover:bg-red-800 text-white font-bold tracking-widest uppercase rounded border border-red-600 transition-all transform hover:scale-105 pointer-events-auto">
+            Enter Labyrinth
+        </button>
+    </div>
+
     <script>
-        // Web Audio Synthesizer for procedural horror sounds
-        class SoundFX {
+        /**
+         * PROCEDURAL AUDIO ENGINE USING WEB AUDIO API
+         */
+        class SoundEngine {
             constructor() {
                 this.ctx = null;
-                this.enabled = true;
+                this.droneOsc = null;
+                this.heartbeatTimer = null;
+                this.isInitialized = false;
             }
 
             init() {
-                if (!this.ctx) {
-                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-                }
+                if (this.isInitialized) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                this.isInitialized = true;
+                this.startAmbientDrone();
             }
 
-            playShoot(type) {
-                if (!this.enabled || !this.ctx) return;
-                const now = this.ctx.currentTime;
+            // Continuous dark atmospheric background noise
+            startAmbientDrone() {
+                if (!this.ctx) return;
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
-
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-
-                if (type === 'shotgun') {
-                    osc.type = 'sawtooth';
-                    osc.frequency.setValueAtTime(150, now);
-                    osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
-                    gain.gain.setValueAtTime(0.8, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-                    osc.start(now);
-                    osc.stop(now + 0.3);
-                } else if (type === 'rifle') {
-                    osc.type = 'square';
-                    osc.frequency.setValueAtTime(300, now);
-                    osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
-                    gain.gain.setValueAtTime(0.5, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-                    osc.start(now);
-                    osc.stop(now + 0.15);
-                } else { // Pistol
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(400, now);
-                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
-                    gain.gain.setValueAtTime(0.4, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-                    osc.start(now);
-                    osc.stop(now + 0.1);
-                }
-            }
-
-            playZombieGroan() {
-                if (!this.enabled || !this.ctx) return;
-                const now = this.ctx.currentTime;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
 
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(80 + Math.random() * 40, now);
-                osc.frequency.linearRampToValueAtTime(60, now + 0.8);
+                osc.frequency.setValueAtTime(45, this.ctx.currentTime); // Low pitch frequency
 
-                gain.gain.setValueAtTime(0.15, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(120, this.ctx.currentTime);
+
+                gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                this.droneOsc = osc;
+            }
+
+            // Click effect for flashlight switch
+            playSwitchSound() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.05);
+
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
 
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
 
-                osc.start(now);
-                osc.stop(now + 0.8);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
             }
 
-            playPickup() {
-                if (!this.enabled || !this.ctx) return;
+            // Sound when picking up an item
+            playPickupSound() {
+                if (!this.ctx) return;
                 const now = this.ctx.currentTime;
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
 
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(300, now);
-                osc.frequency.exponentialRampToValueAtTime(600, now + 0.2);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.3);
 
                 gain.gain.setValueAtTime(0.2, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
 
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
 
                 osc.start(now);
-                osc.stop(now + 0.2);
+                osc.stop(now + 0.3);
             }
 
-            playClick() {
-                if (!this.enabled || !this.ctx) return;
+            // Dynamic Heartbeat sound when stalker is close
+            playHeartbeat(rateMs = 800) {
+                if (!this.ctx) return;
                 const now = this.ctx.currentTime;
+                
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
 
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(800, now);
-                gain.gain.setValueAtTime(0.1, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(60, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.15);
+
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
 
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
 
                 osc.start(now);
-                osc.stop(now + 0.05);
+                osc.stop(now + 0.15);
+            }
+
+            // Creepy shrieking jumpscare sound effect
+            playJumpscareSound() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                // High pitch screech
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(1200, now);
+                osc.frequency.linearRampToValueAtTime(300, now + 1.2);
+
+                gain.gain.setValueAtTime(0.6, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 1.2);
+
+                // Deep noise burst
+                const bufferSize = this.ctx.sampleRate * 1.0;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const noiseGain = this.ctx.createGain();
+                noiseGain.gain.setValueAtTime(0.5, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
+
+                noise.connect(noiseGain);
+                noiseGain.connect(this.ctx.destination);
+
+                noise.start(now);
             }
         }
 
-        const audio = new SoundFX();
+        const audio = new SoundEngine();
 
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const radarCanvas = document.getElementById('radarCanvas');
-        const radarCtx = radarCanvas.getContext('2d');
+        /**
+         * PROCEDURAL TEXTURE GENERATOR
+         */
+        function createWallTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
 
-        // Resize Canvas
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            radarCanvas.width = 112;
-            radarCanvas.height = 112;
+            ctx.fillStyle = '#111113';
+            ctx.fillRect(0, 0, 256, 256);
+
+            // Draw grungy stone bricks
+            ctx.strokeStyle = '#050505';
+            ctx.lineWidth = 4;
+
+            const rows = 8;
+            const cols = 4;
+            const rh = 256 / rows;
+            const cw = 256 / cols;
+
+            for (let r = 0; r < rows; r++) {
+                const y = r * rh;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(256, y);
+                ctx.stroke();
+
+                const offset = (r % 2) * (cw / 2);
+                for (let c = 0; c < cols + 1; c++) {
+                    const x = c * cw - offset;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x, y + rh);
+                    ctx.stroke();
+                }
+            }
+
+            // Add noisy grit
+            for (let i = 0; i < 3000; i++) {
+                const x = Math.random() * 256;
+                const y = Math.random() * 256;
+                const shade = Math.floor(Math.random() * 40);
+                ctx.fillStyle = `rgba(${shade},${shade},${shade},0.15)`;
+                ctx.fillRect(x, y, 2, 2);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
         }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
 
-        // Inputs
-        const keys = {};
-        const mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false };
-
-        window.addEventListener('keydown', e => {
-            keys[e.key.toLowerCase()] = true;
-            if (e.key === '1') selectWeapon('pistol');
-            if (e.key === '2') selectWeapon('shotgun');
-            if (e.key === '3') selectWeapon('rifle');
-            if (e.key.toLowerCase() === 'r') reloadWeapon();
-            if (e.key.toLowerCase() === 'f') toggleFlashlight();
-            if (e.code === 'Space' && storyActive) advanceStory();
-        });
-
-        window.addEventListener('keyup', e => {
-            keys[e.key.toLowerCase()] = false;
-        });
-
-        canvas.addEventListener('mousemove', e => {
-            const rect = canvas.getBoundingClientRect();
-            mouse.x = e.clientX - rect.left;
-            mouse.y = e.clientY - rect.top;
-        });
-
-        canvas.addEventListener('mousedown', e => {
-            if (e.button === 0) {
-                mouse.down = true;
-                shootWeapon();
-            }
-        });
-
-        canvas.addEventListener('mouseup', e => {
-            if (e.button === 0) mouse.down = false;
-        });
-
-        // Weapon Stats
-        const WEAPONS = {
-            pistol: { name: 'Pistol', damage: 35, fireRate: 300, clipSize: 12, reserve: 48, currentClip: 12, speed: 18, spread: 0.05, icon: 'fa-gun' },
-            shotgun: { name: 'Shotgun', damage: 22, fireRate: 850, clipSize: 6, reserve: 24, currentClip: 6, speed: 15, spread: 0.25, pellets: 6, icon: 'fa-burst' },
-            rifle: { name: 'Assault Rifle', damage: 28, fireRate: 120, clipSize: 30, reserve: 90, currentClip: 30, speed: 22, spread: 0.08, icon: 'fa-crosshairs' }
-        };
-
-        let currentWeaponKey = 'pistol';
-        let lastShotTime = 0;
-
-        // Player Attributes
-        const player = {
-            x: 1000,
-            y: 1000,
-            radius: 16,
-            angle: 0,
-            speed: 3.2,
-            health: 100,
-            maxHealth: 100,
-            stamina: 100,
-            flashlight: true,
-            battery: 100,
-            isDowned: false
-        };
-
-        // Teammates / Bots for Online Mode
-        let teammates = [];
-
-        // Entities
-        let zombies = [];
-        let bullets = [];
-        let particles = [];
-        let items = [];
-        let obstacles = [];
-
-        // Game State Variables
-        let gameMode = 'story'; // 'story' or 'online'
-        let gameActive = false;
-        let storyActive = false;
-        let currentChapterIndex = 0;
-        let currentObjective = '';
-        let waveNumber = 1;
-
-        // Map dimensions
-        const MAP_SIZE = 2400;
-
-        const STORY_CHAPTERS = [
-            {
-                title: "CHAPTER 1: DARKNESS FALLS",
-                dialogs: [
-                    { name: "RECON RADIO", avatar: "fa-radio", text: "Agent, the outbreak reached Compound Delta. Find the green keycard in the western shack to power the generator!" }
-                ],
-                objective: "Find the Keycard in the western quadrant.",
-                setup: () => {
-                    items.push({ x: 300, y: 400, type: 'keycard', label: 'Keycard', radius: 12 });
-                    spawnObstacles();
-                    spawnZombies(12);
-                },
-                checkObjective: () => {
-                    return playerHasKeycard;
-                }
-            },
-            {
-                title: "CHAPTER 2: RESTORE POWER",
-                dialogs: [
-                    { name: "RECON RADIO", avatar: "fa-radio", text: "Great job! Now reach the power generator near the eastern complex and activate it." }
-                ],
-                objective: "Activate the Generator at the eastern wall.",
-                setup: () => {
-                    items.push({ x: 2100, y: 1200, type: 'generator', label: 'Generator', radius: 24 });
-                    spawnZombies(18);
-                },
-                checkObjective: () => {
-                    return generatorActivated;
-                }
-            },
-            {
-                title: "CHAPTER 3: ESCAPE THE HORDE",
-                dialogs: [
-                    { name: "RECON RADIO", avatar: "fa-triangle-exclamation", text: "Warning! High-density infected signatures detected! A Tyrant Zombie approaches the evacuation helipad!" }
-                ],
-                objective: "Defeat the Boss Zombie & Reach Evac Point.",
-                setup: () => {
-                    // Spawn Boss
-                    zombies.push({
-                        x: 1200,
-                        y: 300,
-                        radius: 35,
-                        health: 800,
-                        maxHealth: 800,
-                        speed: 1.8,
-                        damage: 30,
-                        isBoss: true,
-                        color: '#990000'
-                    });
-                    items.push({ x: 1200, y: 150, type: 'evac', label: 'EVAC HELIPAD', radius: 30 });
-                },
-                checkObjective: () => {
-                    const boss = zombies.find(z => z.isBoss);
-                    const evac = items.find(i => i.type === 'evac');
-                    if (!boss && evac && Math.hypot(player.x - evac.x, player.y - evac.y) < 40) {
-                        return true;
-                    }
-                    return false;
-                }
-            }
+        /**
+         * MAZE DEFINITION & GAME GLOBALS
+         */
+        // 1 = Wall, 0 = Empty Path
+        const MAZE_GRID = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+            [1,0,1,0,1,0,1,1,1,0,1,0,1,0,1],
+            [1,0,1,0,0,0,0,0,1,0,0,0,1,0,1],
+            [1,0,1,1,1,1,1,0,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,0,1,1,1,0,1,1,1,1,1],
+            [1,0,0,0,1,0,0,0,1,0,1,0,0,0,1],
+            [1,0,1,0,1,1,1,0,1,0,1,0,1,0,1],
+            [1,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+            [1,0,1,1,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
         ];
 
-        let playerHasKeycard = false;
-        let generatorActivated = false;
+        const UNIT_SIZE = 8;
+        const MAZE_WIDTH = MAZE_GRID[0].length;
+        const MAZE_HEIGHT = MAZE_GRID.length;
 
-        function spawnObstacles() {
-            obstacles = [
-                // World Boundaries
-                { x: 0, y: 0, w: MAP_SIZE, h: 20 },
-                { x: 0, y: MAP_SIZE - 20, w: MAP_SIZE, h: 20 },
-                { x: 0, y: 0, w: 20, h: MAP_SIZE },
-                { x: MAP_SIZE - 20, y: 0, w: 20, h: MAP_SIZE },
+        let scene, camera, renderer;
+        let flashlight, flashlightTarget;
+        let ambientLight;
+        let wallMeshGroup = new THREE.Group();
+        let artifacts = [];
+        let monsterMesh;
 
-                // Buildings & Ruins
-                { x: 400, y: 300, w: 300, h: 200 },
-                { x: 1000, y: 600, w: 400, h: 250 },
-                { x: 1600, y: 400, w: 250, h: 400 },
-                { x: 500, y: 1400, w: 350, h: 350 },
-                { x: 1400, y: 1500, w: 400, h: 300 }
+        // Player State Variables
+        const player = {
+            position: new THREE.Vector3(UNIT_SIZE * 1.5, 2.5, UNIT_SIZE * 1.5),
+            velocity: new THREE.Vector3(),
+            pitch: 0,
+            yaw: 0,
+            stamina: 100,
+            flashlightBattery: 100,
+            flashlightOn: true,
+            collectedArtifacts: 0,
+            totalArtifacts: 5,
+            isDead: false,
+            hasWon: false
+        };
+
+        // Monster AI State
+        const monster = {
+            position: new THREE.Vector3(UNIT_SIZE * 13.5, 1.5, UNIT_SIZE * 11.5),
+            speed: 0.05,
+            chaseSpeed: 0.085,
+            isChasing: false,
+            patrolTarget: new THREE.Vector3()
+        };
+
+        // Inputs State
+        const keys = { w: false, a: false, s: false, d: false, shift: false };
+        let isPointerLocked = false;
+        let heartbeatInterval = null;
+
+        function initEngine() {
+            const canvas = document.getElementById('game-canvas');
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Scene & Creepy Volumetric Fog
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020203);
+            scene.fog = new THREE.FogExp2(0x020203, 0.06);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.copy(player.position);
+
+            // Lighting Setup
+            ambientLight = new THREE.AmbientLight(0x0a0a12, 0.2);
+            scene.add(ambientLight);
+
+            // Flashlight (SpotLight attached to player view)
+            flashlight = new THREE.SpotLight(0xfff5e0, 2.5, 35, Math.PI / 6, 0.4, 1);
+            flashlight.castShadow = true;
+            flashlight.shadow.mapSize.width = 1024;
+            flashlight.shadow.mapSize.height = 1024;
+            flashlight.shadow.camera.near = 0.5;
+            flashlight.shadow.camera.far = 35;
+
+            flashlightTarget = new THREE.Object3D();
+            scene.add(flashlightTarget);
+            flashlight.target = flashlightTarget;
+            scene.add(flashlight);
+
+            // Build Maze Geometry & Entity Mesh
+            buildMaze();
+            spawnArtifacts();
+            buildMonster();
+
+            // Resize Event Handler
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function buildMaze() {
+            const wallTexture = createWallTexture();
+            wallTexture.repeat.set(1, 1);
+
+            const wallMaterial = new THREE.MeshStandardMaterial({
+                map: wallTexture,
+                roughness: 0.9,
+                metalness: 0.1
+            });
+
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x111115,
+                roughness: 0.8
+            });
+
+            const wallGeometry = new THREE.BoxGeometry(UNIT_SIZE, 6, UNIT_SIZE);
+
+            // Construct Maze Walls from Grid
+            for (let r = 0; r < MAZE_HEIGHT; r++) {
+                for (let c = 0; c < MAZE_WIDTH; c++) {
+                    if (MAZE_GRID[r][c] === 1) {
+                        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+                        wall.position.set(
+                            c * UNIT_SIZE + UNIT_SIZE / 2,
+                            3,
+                            r * UNIT_SIZE + UNIT_SIZE / 2
+                        );
+                        wall.castShadow = true;
+                        wall.receiveShadow = true;
+                        wallMeshGroup.add(wall);
+                    }
+                }
+            }
+            scene.add(wallMeshGroup);
+
+            // Floor Geometry
+            const floorGeo = new THREE.PlaneGeometry(MAZE_WIDTH * UNIT_SIZE, MAZE_HEIGHT * UNIT_SIZE);
+            const floor = new THREE.Mesh(floorGeo, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set((MAZE_WIDTH * UNIT_SIZE) / 2, 0, (MAZE_HEIGHT * UNIT_SIZE) / 2);
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Ceiling Geometry
+            const ceiling = new THREE.Mesh(floorGeo, wallMaterial);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.set((MAZE_WIDTH * UNIT_SIZE) / 2, 6, (MAZE_HEIGHT * UNIT_SIZE) / 2);
+            scene.add(ceiling);
+        }
+
+        function spawnArtifacts() {
+            const artifactGeo = new THREE.OctahedronGeometry(0.6);
+            const artifactMat = new THREE.MeshStandardMaterial({
+                color: 0xff0033,
+                emissive: 0x990022,
+                emissiveIntensity: 0.8,
+                roughness: 0.2
+            });
+
+            // Specific open coordinate points inside the maze
+            const spawnPoints = [
+                { r: 1, c: 13 },
+                { r: 11, c: 1 },
+                { r: 5, c: 7 },
+                { r: 9, c: 9 },
+                { r: 11, c: 13 }
             ];
 
-            // Random Ammo & Battery Pickups
-            for (let i = 0; i < 15; i++) {
-                items.push({
-                    x: Math.random() * (MAP_SIZE - 200) + 100,
-                    y: Math.random() * (MAP_SIZE - 200) + 100,
-                    type: Math.random() > 0.4 ? 'ammo' : 'battery',
-                    radius: 10
-                });
+            spawnPoints.forEach((pt, index) => {
+                const mesh = new THREE.Mesh(artifactGeo, artifactMat);
+                mesh.position.set(
+                    pt.c * UNIT_SIZE + UNIT_SIZE / 2,
+                    1.5,
+                    pt.r * UNIT_SIZE + UNIT_SIZE / 2
+                );
+
+                // Dynamic glowing point light for artifact
+                const light = new THREE.PointLight(0xff0033, 1, 6);
+                light.position.copy(mesh.position);
+                scene.add(light);
+
+                mesh.userData = { id: index, light: light, isCollected: false };
+                artifacts.push(mesh);
+                scene.add(mesh);
+            });
+        }
+
+        function buildMonster() {
+            const group = new THREE.Group();
+
+            // Creepy tall shadow body
+            const bodyGeo = new THREE.CylinderGeometry(0.5, 0.2, 4, 8);
+            const bodyMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 2;
+            group.add(body);
+
+            // Glowing red eyes
+            const eyeGeo = new THREE.SphereGeometry(0.08, 8, 8);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(-0.2, 3.6, 0.45);
+
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+            rightEye.position.set(0.2, 3.6, 0.45);
+
+            group.add(leftEye);
+            group.add(rightEye);
+
+            monsterMesh = group;
+            monsterMesh.position.copy(monster.position);
+            scene.add(monsterMesh);
+
+            pickNewMonsterPatrolTarget();
+        }
+
+        function pickNewMonsterPatrolTarget() {
+            let valid = false;
+            while (!valid) {
+                const r = Math.floor(Math.random() * MAZE_HEIGHT);
+                const c = Math.floor(Math.random() * MAZE_WIDTH);
+                if (MAZE_GRID[r][c] === 0) {
+                    monster.patrolTarget.set(
+                        c * UNIT_SIZE + UNIT_SIZE / 2,
+                        1.5,
+                        r * UNIT_SIZE + UNIT_SIZE / 2
+                    );
+                    valid = true;
+                }
             }
         }
 
-        function spawnZombies(count) {
-            for (let i = 0; i < count; i++) {
-                let x, y;
-                do {
-                    x = Math.random() * MAP_SIZE;
-                    y = Math.random() * MAP_SIZE;
-                } while (Math.hypot(player.x - x, player.y - y) < 400); // Don't spawn right next to player
+        function setupControls() {
+            const startBtn = document.getElementById('start-btn');
+            
+            startBtn.addEventListener('click', () => {
+                audio.init();
+                document.body.requestPointerLock();
+            });
 
-                const isFast = Math.random() < 0.25;
-                zombies.push({
-                    x,
-                    y,
-                    radius: isFast ? 13 : 16,
-                    health: isFast ? 45 : 80,
-                    maxHealth: isFast ? 45 : 80,
-                    speed: isFast ? 3.5 : 2.1,
-                    damage: isFast ? 8 : 15,
-                    color: isFast ? '#cc6600' : '#228b22',
-                    isBoss: false
-                });
-            }
-        }
+            document.addEventListener('pointerlockchange', () => {
+                if (document.pointerLockElement === document.body) {
+                    isPointerLocked = true;
+                    document.getElementById('menu-overlay').classList.add('hidden');
+                    document.getElementById('hud').classList.remove('hidden');
+                } else {
+                    isPointerLocked = false;
+                    if (!player.isDead && !player.hasWon) {
+                        document.getElementById('menu-title').textContent = "PAUSED";
+                        document.getElementById('menu-subtitle').textContent = "Click button below to resume playing.";
+                        document.getElementById('start-btn').textContent = "Resume Game";
+                        document.getElementById('menu-overlay').classList.remove('hidden');
+                    }
+                }
+            });
 
-        function selectWeapon(key) {
-            if (WEAPONS[key]) {
-                currentWeaponKey = key;
-                audio.playClick();
-                updateHUD();
-            }
-        }
+            // Mouse Look
+            document.addEventListener('mousemove', (e) => {
+                if (!isPointerLocked || player.isDead) return;
 
-        function reloadWeapon() {
-            const w = WEAPONS[currentWeaponKey];
-            if (w.currentClip < w.clipSize && w.reserve > 0) {
-                const needed = w.clipSize - w.currentClip;
-                const toReload = Math.min(needed, w.reserve);
-                w.currentClip += toReload;
-                w.reserve -= toReload;
-                audio.playClick();
-                updateHUD();
-            }
+                const sensitivity = 0.0025;
+                player.yaw -= e.movementX * sensitivity;
+                player.pitch -= e.movementY * sensitivity;
+
+                // Limit vertical look angle
+                player.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, player.pitch));
+            });
+
+            // Key Events
+            document.addEventListener('keydown', (e) => {
+                switch (e.code) {
+                    case 'KeyW': keys.w = true; break;
+                    case 'KeyA': keys.a = true; break;
+                    case 'KeyS': keys.s = true; break;
+                    case 'KeyD': keys.d = true; break;
+                    case 'ShiftLeft':
+                    case 'ShiftRight': keys.shift = true; break;
+                    case 'KeyF': toggleFlashlight(); break;
+                    case 'KeyE': interact(); break;
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                switch (e.code) {
+                    case 'KeyW': keys.w = false; break;
+                    case 'KeyA': keys.a = false; break;
+                    case 'KeyS': keys.s = false; break;
+                    case 'KeyD': keys.d = false; break;
+                    case 'ShiftLeft':
+                    case 'ShiftRight': keys.shift = false; break;
+                }
+            });
         }
 
         function toggleFlashlight() {
-            player.flashlight = !player.flashlight;
-            audio.playClick();
+            if (player.flashlightBattery <= 0 || player.isDead) return;
+            player.flashlightOn = !player.flashlightOn;
+            flashlight.visible = player.flashlightOn;
+            audio.playSwitchSound();
         }
 
-        function shootWeapon() {
-            if (!gameActive || storyActive || player.isDowned) return;
-            const now = Date.now();
-            const w = WEAPONS[currentWeaponKey];
+        function interact() {
+            if (player.isDead || player.hasWon) return;
 
-            if (now - lastShotTime < w.fireRate) return;
-            if (w.currentClip <= 0) {
-                reloadWeapon();
-                return;
-            }
+            artifacts.forEach(item => {
+                if (!item.userData.isCollected) {
+                    const dist = player.position.distanceTo(item.position);
+                    if (dist < 4.0) {
+                        // Collect artifact
+                        item.userData.isCollected = true;
+                        scene.remove(item);
+                        scene.remove(item.userData.light);
 
-            lastShotTime = now;
-            w.currentClip--;
-            audio.playShoot(currentWeaponKey);
+                        player.collectedArtifacts++;
+                        audio.playPickupSound();
 
-            const pellets = w.pellets || 1;
-            for (let i = 0; i < pellets; i++) {
-                const spreadAngle = player.angle + (Math.random() - 0.5) * w.spread;
-                bullets.push({
-                    x: player.x + Math.cos(player.angle) * 20,
-                    y: player.y + Math.sin(player.angle) * 20,
-                    vx: Math.cos(spreadAngle) * w.speed,
-                    vy: Math.sin(spreadAngle) * w.speed,
-                    damage: w.damage,
-                    life: 60
-                });
-            }
+                        // Update HUD
+                        document.getElementById('objective-text').textContent = 
+                            `Collect Cursed Artifacts (${player.collectedArtifacts}/${player.totalArtifacts})`;
 
-            // Create muzzle flash particles
-            for (let i = 0; i < 4; i++) {
-                particles.push({
-                    x: player.x + Math.cos(player.angle) * 22,
-                    y: player.y + Math.sin(player.angle) * 22,
-                    vx: (Math.random() - 0.5) * 3,
-                    vy: (Math.random() - 0.5) * 3,
-                    color: '#ffcc00',
-                    radius: Math.random() * 3 + 1,
-                    life: 10
-                });
-            }
-
-            updateHUD();
+                        if (player.collectedArtifacts >= player.totalArtifacts) {
+                            triggerVictory();
+                        }
+                    }
+                }
+            });
         }
 
-        function update() {
-            if (!gameActive || storyActive) return;
+        function checkWallCollision(newPos) {
+            const radius = 0.8;
+            for (let r = 0; r < MAZE_HEIGHT; r++) {
+                for (let c = 0; c < MAZE_WIDTH; c++) {
+                    if (MAZE_GRID[r][c] === 1) {
+                        const minX = c * UNIT_SIZE;
+                        const maxX = minX + UNIT_SIZE;
+                        const minZ = r * UNIT_SIZE;
+                        const maxZ = minZ + UNIT_SIZE;
 
-            // Player Movement Logic
-            let dx = 0;
-            let dy = 0;
-            if (keys['w'] || keys['arrowup']) dy -= 1;
-            if (keys['s'] || keys['arrowdown']) dy += 1;
-            if (keys['a'] || keys['arrowleft']) dx -= 1;
-            if (keys['d'] || keys['arrowright']) dx += 1;
+                        // Closest point calculation
+                        const closestX = Math.max(minX, Math.min(newPos.x, maxX));
+                        const closestZ = Math.max(minZ, Math.min(newPos.z, maxZ));
 
-            // Sprinting Mechanic
-            let currentSpeed = player.speed;
-            if (keys['shift'] && player.stamina > 10 && (dx !== 0 || dy !== 0)) {
-                currentSpeed *= 1.6;
-                player.stamina = Math.max(0, player.stamina - 0.6);
+                        const distX = newPos.x - closestX;
+                        const distZ = newPos.z - closestZ;
+                        const distanceSquared = (distX * distX) + (distZ * distZ);
+
+                        if (distanceSquared < (radius * radius)) {
+                            return true; // Collision detected
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function updateMonster() {
+            if (player.isDead || player.hasWon) return;
+
+            const distToPlayer = monster.position.distanceTo(player.position);
+
+            // Heartbeat audio update based on proximity
+            if (distToPlayer < 25) {
+                if (!heartbeatInterval) {
+                    heartbeatInterval = setInterval(() => {
+                        const rate = Math.max(200, distToPlayer * 30);
+                        audio.playHeartbeat(rate);
+                    }, 600);
+                }
+            } else if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+
+            // Line of sight / proximity trigger chase
+            if (distToPlayer < 20) {
+                monster.isChasing = true;
+                document.getElementById('status-text').textContent = "HUNTED!";
+                document.getElementById('status-text').className = "text-xs text-red-600 font-mono animate-pulse";
             } else {
-                player.stamina = Math.min(100, player.stamina + 0.3);
+                monster.isChasing = false;
+                document.getElementById('status-text').textContent = "NORMAL";
+                document.getElementById('status-text').className = "text-xs text-green-400 font-mono";
             }
 
-            if (dx !== 0 && dy !== 0) {
-                dx *= 0.7071;
-                dy *= 0.7071;
+            // Movement logic
+            let target = monster.isChasing ? player.position : monster.patrolTarget;
+            let currentSpeed = monster.isChasing ? monster.chaseSpeed : monster.speed;
+
+            let dir = new THREE.Vector3().subVectors(target, monster.position);
+            dir.y = 0; // Lock to floor plane
+
+            if (dir.length() < 1.0 && !monster.isChasing) {
+                pickNewMonsterPatrolTarget();
+            } else {
+                dir.normalize();
+                monster.position.addScaledVector(dir, currentSpeed);
+                monsterMesh.position.copy(monster.position);
+                monsterMesh.lookAt(player.position.x, monsterMesh.position.y, player.position.z);
             }
 
-            // Continuous Automatic Firing
-            if (mouse.down && currentWeaponKey === 'rifle') {
-                shootWeapon();
-            }
-
-            // Flashlight Battery Drain
-            if (player.flashlight) {
-                player.battery = Math.max(0, player.battery - 0.02);
-                if (player.battery <= 0) player.flashlight = false;
-            }
-
-            // Proposed Next Position
-            let newX = player.x + dx * currentSpeed;
-            let newY = player.y + dy * currentSpeed;
-
-            // Obstacle Collisions
-            for (let obs of obstacles) {
-                if (newX + player.radius > obs.x && newX - player.radius < obs.x + obs.w &&
-                    newY + player.radius > obs.y && newY - player.radius < obs.y + obs.h) {
-                    newX = player.x;
-                    newY = player.y;
-                }
-            }
-
-            player.x = Math.max(player.radius, Math.min(MAP_SIZE - player.radius, newX));
-            player.y = Math.max(player.radius, Math.min(MAP_SIZE - player.radius, newY));
-
-            // Aim angle calculated toward Mouse World Pos
-            const screenCenterX = canvas.width / 2;
-            const screenCenterY = canvas.height / 2;
-            player.angle = Math.atan2(mouse.y - screenCenterY, mouse.x - screenCenterX);
-
-            // Item Interactions / Pickups
-            for (let i = items.length - 1; i >= 0; i--) {
-                const item = items[i];
-                const dist = Math.hypot(player.x - item.x, player.y - item.y);
-
-                if (dist < player.radius + item.radius) {
-                    if (item.type === 'ammo') {
-                        WEAPONS[currentWeaponKey].reserve += 18;
-                        audio.playPickup();
-                        items.splice(i, 1);
-                        updateHUD();
-                    } else if (item.type === 'battery') {
-                        player.battery = Math.min(100, player.battery + 50);
-                        audio.playPickup();
-                        items.splice(i, 1);
-                        updateHUD();
-                    } else if (item.type === 'keycard') {
-                        playerHasKeycard = true;
-                        audio.playPickup();
-                        items.splice(i, 1);
-                        showStoryOverlay("KEYCARD OBTAINED", "fa-key", "You picked up the keycard! Proceed to the generator.");
-                    } else if (item.type === 'generator' && keys['e']) {
-                        if (playerHasKeycard) {
-                            generatorActivated = true;
-                            audio.playPickup();
-                            showStoryOverlay("POWER RESTORED", "fa-bolt", "The power generator hums to life! The exit sector is unlocking.");
-                        } else {
-                            showStoryOverlay("LOCKED GENERATOR", "fa-lock", "You need the keycard from the western shack to power this on!");
-                        }
-                    }
-                }
-            }
-
-            // Update Bullets
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const b = bullets[i];
-                b.x += b.vx;
-                b.y += b.vy;
-                b.life--;
-
-                // Check bullet collisions with obstacles
-                let hitObstacle = false;
-                for (let obs of obstacles) {
-                    if (b.x > obs.x && b.x < obs.x + obs.w && b.y > obs.y && b.y < obs.y + obs.h) {
-                        hitObstacle = true;
-                        break;
-                    }
-                }
-
-                if (hitObstacle || b.life <= 0) {
-                    bullets.splice(i, 1);
-                    continue;
-                }
-
-                // Check bullet collisions with zombies
-                for (let j = zombies.length - 1; j >= 0; j--) {
-                    const z = zombies[j];
-                    if (Math.hypot(b.x - z.x, b.y - z.y) < z.radius + 4) {
-                        z.health -= b.damage;
-
-                        // Blood splatter particles
-                        for (let p = 0; p < 3; p++) {
-                            particles.push({
-                                x: z.x,
-                                y: z.y,
-                                vx: (Math.random() - 0.5) * 4,
-                                vy: (Math.random() - 0.5) * 4,
-                                color: '#990000',
-                                radius: Math.random() * 3 + 1,
-                                life: 20
-                            });
-                        }
-
-                        if (z.health <= 0) {
-                            // Chance to drop ammo or battery
-                            if (Math.random() < 0.25) {
-                                items.push({
-                                    x: z.x,
-                                    y: z.y,
-                                    type: Math.random() > 0.5 ? 'ammo' : 'battery',
-                                    radius: 10
-                                });
-                            }
-                            zombies.splice(j, 1);
-                        }
-
-                        bullets.splice(i, 1);
-                        break;
-                    }
-                }
-            }
-
-            // Update Zombies
-            for (let z of zombies) {
-                // Find closest target (Player or Teammates)
-                let target = player;
-                let minDist = Math.hypot(player.x - z.x, player.y - z.y);
-
-                for (let bot of teammates) {
-                    if (!bot.isDowned) {
-                        const d = Math.hypot(bot.x - z.x, bot.y - z.y);
-                        if (d < minDist) {
-                            minDist = d;
-                            target = bot;
-                        }
-                    }
-                }
-
-                const angle = Math.atan2(target.y - z.y, target.x - z.x);
-                z.x += Math.cos(angle) * z.speed;
-                z.y += Math.sin(angle) * z.speed;
-
-                // Zombie Attacks
-                if (minDist < z.radius + target.radius) {
-                    target.health -= z.damage * 0.05;
-                    if (Math.random() < 0.05) audio.playZombieGroan();
-
-                    if (target === player && player.health <= 0) {
-                        endGame(false, "You were torn apart by the infected.");
-                    }
-                }
-            }
-
-            // Update Teammate AI Bots (Online / Co-op mode simulator)
-            for (let bot of teammates) {
-                if (bot.isDowned) continue;
-
-                // Follow player or shoot nearby zombies
-                let nearestZombie = null;
-                let minDist = 350;
-                for (let z of zombies) {
-                    const d = Math.hypot(bot.x - z.x, bot.y - z.y);
-                    if (d < minDist) {
-                        minDist = d;
-                        nearestZombie = z;
-                    }
-                }
-
-                if (nearestZombie) {
-                    // Shoot at zombie
-                    const angle = Math.atan2(nearestZombie.y - bot.y, nearestZombie.x - bot.x);
-                    bot.angle = angle;
-                    if (Math.random() < 0.05) {
-                        bullets.push({
-                            x: bot.x,
-                            y: bot.y,
-                            vx: Math.cos(angle) * 16,
-                            vy: Math.sin(angle) * 16,
-                            damage: 20,
-                            life: 50
-                        });
-                    }
-                } else {
-                    // Follow Player
-                    const pDist = Math.hypot(player.x - bot.x, player.y - bot.y);
-                    if (pDist > 100) {
-                        const angle = Math.atan2(player.y - bot.y, player.x - bot.x);
-                        bot.x += Math.cos(angle) * 2.5;
-                        bot.y += Math.sin(angle) * 2.5;
-                        bot.angle = angle;
-                    }
-                }
-            }
-
-            // Update Particles
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.life--;
-                if (p.life <= 0) particles.splice(i, 1);
-            }
-
-            // Story Mode Chapter Progression Check
-            if (gameMode === 'story' && STORY_CHAPTERS[currentChapterIndex]) {
-                if (STORY_CHAPTERS[currentChapterIndex].checkObjective()) {
-                    currentChapterIndex++;
-                    if (currentChapterIndex < STORY_CHAPTERS.length) {
-                        loadChapter(currentChapterIndex);
-                    } else {
-                        endGame(true, "VICTORY! You escaped the infected zone alive!");
-                    }
-                }
-            }
-
-            // Online Mode Wave Spawner
-            if (gameMode === 'online' && zombies.length === 0) {
-                waveNumber++;
-                document.getElementById('waveNum').innerText = waveNumber;
-                spawnZombies(10 + waveNumber * 5);
-            }
-
-            updateHUD();
-        }
-
-        function render() {
-            // Clear Screen
-            ctx.fillStyle = '#080808';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            if (!gameActive) return;
-
-            ctx.save();
-            // Camera Translation centered on Player
-            ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
-
-            // Draw Ground Grid / Tiles
-            ctx.strokeStyle = '#141414';
-            ctx.lineWidth = 1;
-            const tileSize = 100;
-            for (let x = 0; x < MAP_SIZE; x += tileSize) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, MAP_SIZE);
-                ctx.stroke();
-            }
-            for (let y = 0; y < MAP_SIZE; y += tileSize) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(MAP_SIZE, y);
-                ctx.stroke();
-            }
-
-            // Draw World Boundary
-            ctx.strokeStyle = '#880000';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
-
-            // Draw Obstacles
-            ctx.fillStyle = '#1c1c1e';
-            ctx.strokeStyle = '#2c2c2e';
-            ctx.lineWidth = 2;
-            for (let obs of obstacles) {
-                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-                ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
-            }
-
-            // Draw Pickups / Items
-            for (let item of items) {
-                ctx.beginPath();
-                ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
-                if (item.type === 'ammo') ctx.fillStyle = '#eab308';
-                else if (item.type === 'battery') ctx.fillStyle = '#22d3ee';
-                else if (item.type === 'keycard') ctx.fillStyle = '#22c55e';
-                else if (item.type === 'generator') ctx.fillStyle = '#ef4444';
-                else ctx.fillStyle = '#a855f7';
-                ctx.fill();
-
-                // Item Ring Indicator
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-            }
-
-            // Draw Bullets
-            ctx.fillStyle = '#fde047';
-            for (let b of bullets) {
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, 2.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Draw Particles
-            for (let p of particles) {
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Draw Teammates / Bots
-            for (let bot of teammates) {
-                ctx.save();
-                ctx.translate(bot.x, bot.y);
-                ctx.rotate(bot.angle);
-                ctx.fillStyle = '#06b6d4';
-                ctx.beginPath();
-                ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.fillRect(0, -3, 20, 6); // Weapon
-                ctx.restore();
-            }
-
-            // Draw Zombies
-            for (let z of zombies) {
-                ctx.save();
-                ctx.translate(z.x, z.y);
-                const angle = Math.atan2(player.y - z.y, player.x - z.x);
-                ctx.rotate(angle);
-
-                ctx.fillStyle = z.color;
-                ctx.beginPath();
-                ctx.arc(0, 0, z.radius, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Zombie arms extending
-                ctx.fillRect(4, -z.radius, 10, 4);
-                ctx.fillRect(4, z.radius - 4, 10, 4);
-
-                // Health bar for Boss
-                if (z.isBoss) {
-                    ctx.rotate(-angle);
-                    ctx.fillStyle = '#440000';
-                    ctx.fillRect(-30, -50, 60, 6);
-                    ctx.fillStyle = '#ff0000';
-                    ctx.fillRect(-30, -50, (z.health / z.maxHealth) * 60, 6);
-                }
-
-                ctx.restore();
-            }
-
-            // Draw Player
-            ctx.save();
-            ctx.translate(player.x, player.y);
-            ctx.rotate(player.angle);
-
-            // Player Body
-            ctx.fillStyle = '#dc2626';
-            ctx.beginPath();
-            ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Gun Barrel
-            ctx.fillStyle = '#52525b';
-            ctx.fillRect(0, -3, 22, 6);
-            ctx.restore();
-
-            /* DARKNESS & LIGHTING MASK EFFECT (HORROR ATMOSPHERE) */
-            ctx.restore(); // Restore camera translation
-
-            // Dynamic Dark Fog of War Layer
-            ctx.save();
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.94)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Cut out Flashlight Cone & Ambient Light around Player
-            ctx.globalCompositeOperation = 'destination-out';
-
-            const playerScreenX = canvas.width / 2;
-            const playerScreenY = canvas.height / 2;
-
-            // Ambient Light circle around player
-            const ambientGlow = ctx.createRadialGradient(playerScreenX, playerScreenY, 10, playerScreenX, playerScreenY, 80);
-            ambientGlow.addColorStop(0, 'rgba(0,0,0,1)');
-            ambientGlow.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = ambientGlow;
-            ctx.beginPath();
-            ctx.arc(playerScreenX, playerScreenY, 80, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Flashlight Cone
-            if (player.flashlight && player.battery > 0) {
-                const coneLength = 350;
-                const coneWidth = 0.45; // angle beam spread
-
-                ctx.beginPath();
-                ctx.moveTo(playerScreenX, playerScreenY);
-                ctx.arc(playerScreenX, playerScreenY, coneLength, player.angle - coneWidth, player.angle + coneWidth);
-                ctx.closePath();
-
-                const coneGlow = ctx.createRadialGradient(playerScreenX, playerScreenY, 20, playerScreenX, playerScreenY, coneLength);
-                coneGlow.addColorStop(0, 'rgba(0,0,0,1)');
-                coneGlow.addColorStop(0.8, 'rgba(0,0,0,0.8)');
-                coneGlow.addColorStop(1, 'rgba(0,0,0,0)');
-                ctx.fillStyle = coneGlow;
-                ctx.fill();
-            }
-
-            ctx.restore();
-
-            // Render Minimap Radar
-            renderRadar();
-        }
-
-        function renderRadar() {
-            radarCtx.fillStyle = '#050505';
-            radarCtx.fillRect(0, 0, radarCanvas.width, radarCanvas.height);
-
-            const scale = radarCanvas.width / MAP_SIZE;
-
-            // Draw Zombies on Radar
-            radarCtx.fillStyle = '#ef4444';
-            for (let z of zombies) {
-                radarCtx.fillRect(z.x * scale, z.y * scale, 3, 3);
-            }
-
-            // Draw Objective Items on Radar
-            radarCtx.fillStyle = '#eab308';
-            for (let item of items) {
-                radarCtx.fillRect(item.x * scale, item.y * scale, 4, 4);
-            }
-
-            // Draw Player on Radar
-            radarCtx.fillStyle = '#22c55e';
-            radarCtx.fillRect(player.x * scale - 2, player.y * scale - 2, 5, 5);
-        }
-
-        function updateHUD() {
-            document.getElementById('healthBar').style.width = `${Math.max(0, player.health)}%`;
-            document.getElementById('healthText').innerText = `${Math.ceil(player.health)} HP`;
-
-            document.getElementById('staminaBar').style.width = `${player.stamina}%`;
-            document.getElementById('staminaText').innerText = `${Math.ceil(player.stamina)}%`;
-
-            document.getElementById('batteryBar').style.width = `${player.battery}%`;
-            document.getElementById('batteryText').innerText = `${Math.ceil(player.battery)}%`;
-
-            const w = WEAPONS[currentWeaponKey];
-            document.getElementById('weaponName').innerText = w.name;
-            document.getElementById('ammoClip').innerText = w.currentClip;
-            document.getElementById('ammoReserve').innerText = w.reserve;
-            document.getElementById('weaponIcon').innerHTML = `<i class="fa-solid ${w.icon}"></i>`;
-        }
-
-        function showStoryOverlay(title, icon, text) {
-            storyActive = true;
-            document.getElementById('speakerName').innerText = title;
-            document.getElementById('speakerAvatar').innerHTML = `<i class="fa-solid ${icon}"></i>`;
-            document.getElementById('dialogText').innerText = `"${text}"`;
-            document.getElementById('storyOverlay').classList.remove('hidden');
-        }
-
-        function advanceStory() {
-            storyActive = false;
-            document.getElementById('storyOverlay').classList.add('hidden');
-        }
-
-        function loadChapter(index) {
-            const ch = STORY_CHAPTERS[index];
-            document.getElementById('chapterTitle').innerText = ch.title;
-            document.getElementById('objectiveText').innerText = ch.objective;
-
-            ch.setup();
-            if (ch.dialogs && ch.dialogs[0]) {
-                const d = ch.dialogs[0];
-                showStoryOverlay(d.name, d.avatar, d.text);
+            // Check Jumpscare / Catch Condition
+            if (distToPlayer < 2.0) {
+                triggerJumpscare();
             }
         }
 
-        function startStoryMode() {
-            audio.init();
-            gameMode = 'story';
-            gameActive = true;
-            currentChapterIndex = 0;
-            playerHasKeycard = false;
-            generatorActivated = false;
+        function triggerJumpscare() {
+            player.isDead = true;
+            document.exitPointerLock();
 
-            // Reset Player
-            player.x = 1200;
-            player.y = 1200;
-            player.health = 100;
-            player.battery = 100;
-            zombies = [];
-            bullets = [];
-            items = [];
-            teammates = [];
+            audio.playJumpscareSound();
 
-            document.getElementById('mainMenu').classList.add('hidden');
-            document.getElementById('hud').classList.remove('hidden');
-            document.getElementById('waveInfo').classList.add('hidden');
+            const jumpscareOverlay = document.getElementById('jumpscare-container');
+            jumpscareOverlay.classList.remove('hidden');
+            document.body.classList.add('shake');
 
-            loadChapter(0);
+            setTimeout(() => {
+                jumpscareOverlay.classList.add('hidden');
+                document.body.classList.remove('shake');
+
+                document.getElementById('menu-title').textContent = "YOU DIED";
+                document.getElementById('menu-subtitle').textContent = "The entity caught you in the darkness.";
+                document.getElementById('start-btn').textContent = "Try Again";
+                document.getElementById('menu-overlay').classList.remove('hidden');
+
+                // Reset position on restart
+                startBtnReset();
+            }, 1200);
         }
 
-        function startOnlineMode() {
-            audio.init();
-            gameMode = 'online';
-            gameActive = true;
-            waveNumber = 1;
+        function triggerVictory() {
+            player.hasWon = true;
+            document.exitPointerLock();
 
-            // Reset Player
-            player.x = 1200;
-            player.y = 1200;
-            player.health = 100;
-            player.battery = 100;
-            zombies = [];
-            bullets = [];
-            items = [];
+            document.getElementById('menu-title').textContent = "ESCAPED!";
+            document.getElementById('menu-title').className = "text-4xl md:text-6xl font-extrabold text-green-500 tracking-widest uppercase mb-2";
+            document.getElementById('menu-subtitle').textContent = "You collected all 5 artifacts and survived the horror!";
+            document.getElementById('start-btn').textContent = "Play Again";
+            document.getElementById('menu-overlay').classList.remove('hidden');
 
-            // Add Simulated Teammates / Bots
-            teammates = [
-                { x: 1160, y: 1200, angle: 0, health: 100, isDowned: false }
-            ];
-
-            spawnObstacles();
-            spawnZombies(10);
-
-            document.getElementById('lobbyMenu').classList.add('hidden');
-            document.getElementById('hud').classList.remove('hidden');
-            document.getElementById('waveInfo').classList.remove('hidden');
-            document.getElementById('chapterTitle').innerText = "CO-OP SURVIVAL MODE";
-            document.getElementById('objectiveText').innerText = "Survive the relentless zombie horde waves together!";
+            startBtnReset();
         }
 
-        function endGame(victory, message) {
-            gameActive = false;
-            document.getElementById('endOverlay').classList.remove('hidden');
-            document.getElementById('endTitle').innerText = victory ? "YOU SURVIVED" : "YOU DIED";
-            document.getElementById('endTitle').className = victory ? "horror-font text-6xl text-green-500 mb-2" : "horror-font text-6xl text-red-600 mb-2";
-            document.getElementById('endSubtitle').innerText = message;
+        function startBtnReset() {
+            const btn = document.getElementById('start-btn');
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+
+            newBtn.addEventListener('click', () => {
+                window.location.reload();
+            });
         }
 
-        // Main Game Loop
-        function gameLoop() {
-            update();
-            render();
-            requestAnimationFrame(gameLoop);
+        function updatePlayerMovement() {
+            if (!isPointerLocked || player.isDead) return;
+
+            // Movement speeds
+            const isSprinting = keys.shift && player.stamina > 0 && (keys.w || keys.a || keys.s || keys.d);
+            const speed = isSprinting ? 0.18 : 0.09;
+
+            // Handle Stamina Decay/Regen
+            if (isSprinting) {
+                player.stamina = Math.max(0, player.stamina - 0.4);
+            } else {
+                player.stamina = Math.min(100, player.stamina + 0.2);
+            }
+            document.getElementById('stamina-bar').style.width = `${player.stamina}%`;
+
+            // Flashlight battery decay when turned on
+            if (player.flashlightOn) {
+                player.flashlightBattery = Math.max(0, player.flashlightBattery - 0.015);
+                document.getElementById('battery-bar').style.width = `${player.flashlightBattery}%`;
+                document.getElementById('battery-num').textContent = `${Math.floor(player.flashlightBattery)}%`;
+
+                if (player.flashlightBattery <= 0) {
+                    player.flashlightOn = false;
+                    flashlight.visible = false;
+                } else if (player.flashlightBattery < 20 && Math.random() < 0.05) {
+                    // Creepy flicker effect on low battery
+                    flashlight.visible = !flashlight.visible;
+                }
+            }
+
+            // Calculate forward and right directional vectors
+            const forward = new THREE.Vector3(
+                -Math.sin(player.yaw),
+                0,
+                -Math.cos(player.yaw)
+            ).normalize();
+
+            const right = new THREE.Vector3(
+                Math.cos(player.yaw),
+                0,
+                -Math.sin(player.yaw)
+            ).normalize();
+
+            const moveDir = new THREE.Vector3(0, 0, 0);
+
+            if (keys.w) moveDir.add(forward);
+            if (keys.s) moveDir.sub(forward);
+            if (keys.d) moveDir.add(right);
+            if (keys.a) moveDir.sub(right);
+
+            if (moveDir.length() > 0) moveDir.normalize();
+
+            // Collision check on X axis
+            const targetPosX = player.position.x + moveDir.x * speed;
+            if (!checkWallCollision(new THREE.Vector3(targetPosX, player.position.y, player.position.z))) {
+                player.position.x = targetPosX;
+            }
+
+            // Collision check on Z axis
+            const targetPosZ = player.position.z + moveDir.z * speed;
+            if (!checkWallCollision(new THREE.Vector3(player.position.x, player.position.y, targetPosZ))) {
+                player.position.z = targetPosZ;
+            }
+
+            // Update Camera Position and Orientation
+            camera.position.copy(player.position);
+
+            const lookTarget = new THREE.Vector3(
+                player.position.x - Math.sin(player.yaw) * Math.cos(player.pitch),
+                player.position.y + Math.sin(player.pitch),
+                player.position.z - Math.cos(player.yaw) * Math.cos(player.pitch)
+            );
+            camera.lookAt(lookTarget);
+
+            // Attach flashlight to player view target
+            flashlight.position.copy(player.position);
+            flashlightTarget.position.copy(lookTarget);
+
+            // Artifact Interaction Check Proximity UI
+            let nearArtifact = false;
+            artifacts.forEach(item => {
+                if (!item.userData.isCollected && player.position.distanceTo(item.position) < 4.0) {
+                    nearArtifact = true;
+                }
+            });
+
+            const interactPrompt = document.getElementById('interact-prompt');
+            if (nearArtifact) {
+                interactPrompt.classList.remove('hidden');
+            } else {
+                interactPrompt.classList.add('hidden');
+            }
         }
 
-        // Event Listeners for Buttons
-        document.getElementById('btnStoryMode').addEventListener('click', startStoryMode);
-        document.getElementById('btnOnlineMode').addEventListener('click', () => {
-            document.getElementById('mainMenu').classList.add('hidden');
-            document.getElementById('lobbyMenu').classList.remove('hidden');
-        });
-        document.getElementById('btnCloseLobby').addEventListener('click', () => {
-            document.getElementById('lobbyMenu').classList.add('hidden');
-            document.getElementById('mainMenu').classList.remove('hidden');
-        });
-        document.getElementById('btnStartCoop').addEventListener('click', startOnlineMode);
-        document.getElementById('btnContinueStory').addEventListener('click', advanceStory);
-        document.getElementById('btnControls').addEventListener('click', () => {
-            document.getElementById('controlsModal').classList.remove('hidden');
-        });
-        document.getElementById('btnCloseControls').addEventListener('click', () => {
-            document.getElementById('controlsModal').classList.close ? document.getElementById('controlsModal').close() : document.getElementById('controlsModal').classList.add('hidden');
-        });
-        document.getElementById('btnRestart').addEventListener('click', () => {
-            document.getElementById('endOverlay').classList.add('hidden');
-            document.getElementById('mainMenu').classList.remove('hidden');
-        });
-        document.getElementById('btnGenRoom').addEventListener('click', () => {
-            const code = 'OUTBREAK-' + Math.floor(10 + Math.random() * 90);
-            document.getElementById('roomCode').value = code;
-        });
+        function animateArtifacts() {
+            artifacts.forEach(item => {
+                if (!item.userData.isCollected) {
+                    item.rotation.y += 0.02;
+                    item.position.y = 1.5 + Math.sin(Date.now() * 0.003) * 0.15;
+                }
+            });
+        }
 
-        // Audio toggle
-        document.getElementById('btnSoundToggle').addEventListener('click', () => {
-            audio.enabled = !audio.enabled;
-            document.getElementById('btnSoundToggle').innerHTML = audio.enabled ?
-                '<i class="fa-solid fa-volume-high"></i> <span>AUDIO: ENABLED</span>' :
-                '<i class="fa-solid fa-volume-xmark"></i> <span>AUDIO: DISABLED</span>';
-        });
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
 
-        // Start Loop
-        window.onload = () => {
-            gameLoop();
+        // Main Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            updatePlayerMovement();
+            updateMonster();
+            animateArtifacts();
+
+            renderer.render(scene, camera);
+        }
+
+        // Window Load Initialization
+        window.onload = function() {
+            initEngine();
+            setupControls();
+            animate();
         };
     </script>
 </body>

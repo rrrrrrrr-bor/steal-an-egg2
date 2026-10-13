@@ -3,947 +3,286 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Labyrinth of Shadows - 3D Horror Experience</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>Hook Man Game</title>
     <style>
-        body, html {
+        body {
             margin: 0;
             padding: 0;
-            width: 100%;
-            height: 100%;
+            background-color: #1a1a2e;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
             overflow: hidden;
-            background-color: #000;
-            font-family: 'Courier New', Courier, monospace;
-            user-select: none;
         }
 
-        #game-canvas {
-            width: 100%;
-            height: 100%;
-            display: block;
+        #game-container {
+            position: relative;
+            text-align: center;
         }
 
-        /* Screen shake animation for jumpscares */
-        .shake {
-            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        canvas {
+            background-color: #16213e;
+            border: 4px solid #0f3460;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            cursor: pointer;
         }
 
-        @keyframes shake {
-            10%, 90% { transform: translate3d(-4px, 0, 0) rotate(-1deg); }
-            20%, 80% { transform: translate3d(6px, 0, 0) rotate(2deg); }
-            30%, 50%, 70% { transform: translate3d(-8px, 0, 0) rotate(-2deg); }
-            40%, 60% { transform: translate3d(8px, 0, 0) rotate(1deg); }
+        .ui-panel {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            width: 800px;
+            font-size: 1.2rem;
+            font-weight: bold;
         }
 
-        /* Scanline effect overlay */
-        .scanlines {
-            background: linear-gradient(
-                rgba(18, 16, 16, 0) 50%, 
-                rgba(0, 0, 0, 0.25) 50%
-            ), linear-gradient(
-                90deg,
-                rgba(255, 0, 0, 0.03),
-                rgba(0, 255, 0, 0.01),
-                rgba(0, 0, 255, 0.03)
-            );
-            background-size: 100% 4px, 6px 100%;
-            pointer-events: none;
+        .instructions {
+            margin-top: 10px;
+            color: #e94560;
+            font-size: 0.9rem;
         }
     </style>
 </head>
-<body class="relative text-white flex items-center justify-center">
+<body>
 
-    <!-- Game Canvas -->
-    <canvas id="game-canvas"></canvas>
-
-    <!-- CRT Visual Overlay Filter -->
-    <div class="scanlines absolute inset-0 z-10 pointer-events-none"></div>
-
-    <!-- Vignette / Darkness Effect -->
-    <div class="absolute inset-0 z-10 pointer-events-none" style="background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.85) 90%);"></div>
-
-    <!-- Red Damage Flash Overlay -->
-    <div id="damage-overlay" class="absolute inset-0 bg-red-900 opacity-0 z-20 pointer-events-none transition-opacity duration-200"></div>
-
-    <!-- Jumpscare Overlay -->
-    <div id="jumpscare-container" class="absolute inset-0 z-50 bg-black hidden flex items-center justify-center overflow-hidden">
-        <svg id="monster-face" class="w-full h-full text-red-700 animate-ping" viewBox="0 0 100 100" fill="currentColor">
-            <circle cx="50" cy="50" r="45" fill="black" stroke="#800000" stroke-width="4"/>
-            <path d="M 20 35 Q 35 10 45 35 Z" fill="#800000"/>
-            <path d="M 80 35 Q 65 10 55 35 Z" fill="#800000"/>
-            <circle cx="35" cy="40" r="8" fill="#ff0000"/>
-            <circle cx="65" cy="40" r="8" fill="#ff0000"/>
-            <circle cx="35" cy="40" r="3" fill="#ffffff"/>
-            <circle cx="65" cy="40" r="3" fill="#ffffff"/>
-            <path d="M 25 65 Q 50 95 75 65 Q 50 75 25 65 Z" fill="#4a0000"/>
-            <polygon points="30,66 35,75 40,66" fill="white"/>
-            <polygon points="45,67 50,80 55,67" fill="white"/>
-            <polygon points="60,66 65,75 70,66" fill="white"/>
-        </svg>
-    </div>
-
-    <!-- Game HUD Layer -->
-    <div id="hud" class="absolute inset-0 z-20 flex flex-col justify-between p-6 pointer-events-none hidden">
-        <!-- Top Stats Bar -->
-        <div class="flex justify-between items-start">
-            <div class="bg-black/60 border border-gray-800 p-3 rounded backdrop-blur max-w-xs">
-                <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">Objective</div>
-                <div id="objective-text" class="text-sm font-semibold text-red-500">Collect Cursed Artifacts (0/5)</div>
-            </div>
-            
-            <div class="bg-black/60 border border-gray-800 p-3 rounded backdrop-blur text-right">
-                <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">Status</div>
-                <div id="status-text" class="text-xs text-green-400 font-mono">NORMAL</div>
-            </div>
+    <div id="game-container">
+        <div class="ui-panel">
+            <span id="score-display">Score: 0</span>
+            <span id="status-display">Click and hold to hook!</span>
         </div>
-
-        <!-- Crosshair & Action Prompts -->
-        <div class="flex flex-col items-center justify-center text-center">
-            <div class="w-2 h-2 rounded-full bg-white/50 border border-black mb-4"></div>
-            <div id="interact-prompt" class="hidden bg-black/80 text-yellow-400 text-xs px-3 py-1.5 rounded border border-yellow-600/50 uppercase tracking-wider animate-pulse">
-                [E] Pick up Cursed Artifact
-            </div>
-        </div>
-
-        <!-- Bottom Meters -->
-        <div class="flex justify-between items-end gap-4">
-            <!-- Flashlight Bar -->
-            <div class="w-48 bg-black/70 border border-gray-800 p-2 rounded backdrop-blur">
-                <div class="flex justify-between text-xs mb-1 text-gray-300">
-                    <span>FLASHLIGHT [F]</span>
-                    <span id="battery-num">100%</span>
-                </div>
-                <div class="w-full bg-gray-900 h-2 rounded overflow-hidden">
-                    <div id="battery-bar" class="bg-yellow-500 h-full w-full transition-all duration-300"></div>
-                </div>
-            </div>
-
-            <!-- Stamina Bar -->
-            <div class="w-48 bg-black/70 border border-gray-800 p-2 rounded backdrop-blur">
-                <div class="flex justify-between text-xs mb-1 text-gray-300">
-                    <span>STAMINA [SHIFT]</span>
-                </div>
-                <div class="w-full bg-gray-900 h-2 rounded overflow-hidden">
-                    <div id="stamina-bar" class="bg-blue-500 h-full w-full transition-all duration-100"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Start / Pause / Death Overlay Menu -->
-    <div id="menu-overlay" class="absolute inset-0 z-30 bg-black/90 flex flex-col items-center justify-center p-6 text-center">
-        <h1 id="menu-title" class="text-4xl md:text-6xl font-extrabold text-red-700 tracking-widest uppercase mb-2 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)]">
-            Labyrinth of Shadows
-        </h1>
-        <p id="menu-subtitle" class="text-gray-400 max-w-md text-sm mb-8 leading-relaxed">
-            Find all 5 cursed artifacts scattered deep inside the dark labyrinth. Avoid the entity lingering in the shadows. Keep your flashlight charged.
-        </p>
-
-        <div id="controls-guide" class="bg-black/60 border border-red-950/60 p-4 rounded-lg max-w-md text-xs text-gray-300 mb-8 grid grid-cols-2 gap-3 text-left">
-            <div><span class="text-red-500 font-bold">WASD:</span> Move</div>
-            <div><span class="text-red-500 font-bold">MOUSE:</span> Look Around</div>
-            <div><span class="text-red-500 font-bold">SHIFT:</span> Sprint</div>
-            <div><span class="text-red-500 font-bold">F:</span> Toggle Flashlight</div>
-            <div><span class="text-red-500 font-bold">E:</span> Interact / Pickup</div>
-            <div><span class="text-red-500 font-bold">ESC:</span> Pause Game</div>
-        </div>
-
-        <button id="start-btn" class="px-8 py-3 bg-red-900 hover:bg-red-800 text-white font-bold tracking-widest uppercase rounded border border-red-600 transition-all transform hover:scale-105 pointer-events-auto">
-            Enter Labyrinth
-        </button>
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        <div class="instructions">Click and hold the left mouse button near a peg to attach your grappler and swing!</div>
     </div>
 
     <script>
-        /**
-         * PROCEDURAL AUDIO ENGINE USING WEB AUDIO API
-         */
-        class SoundEngine {
-            constructor() {
-                this.ctx = null;
-                this.droneOsc = null;
-                this.heartbeatTimer = null;
-                this.isInitialized = false;
-            }
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score-display');
+        const statusDisplay = document.getElementById('status-display');
 
-            init() {
-                if (this.isInitialized) return;
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                this.ctx = new AudioContext();
-                this.isInitialized = true;
-                this.startAmbientDrone();
-            }
+        // Game State
+        let score = 0;
+        let gameOver = false;
 
-            // Continuous dark atmospheric background noise
-            startAmbientDrone() {
-                if (!this.ctx) return;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                const filter = this.ctx.createBiquadFilter();
-
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(45, this.ctx.currentTime); // Low pitch frequency
-
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(120, this.ctx.currentTime);
-
-                gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-
-                osc.connect(filter);
-                filter.connect(gain);
-                gain.connect(this.ctx.destination);
-
-                osc.start();
-                this.droneOsc = osc;
-            }
-
-            // Click effect for flashlight switch
-            playSwitchSound() {
-                if (!this.ctx) return;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.05);
-
-                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
-
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.05);
-            }
-
-            // Sound when picking up an item
-            playPickupSound() {
-                if (!this.ctx) return;
-                const now = this.ctx.currentTime;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(300, now);
-                osc.frequency.exponentialRampToValueAtTime(800, now + 0.3);
-
-                gain.gain.setValueAtTime(0.2, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-
-                osc.start(now);
-                osc.stop(now + 0.3);
-            }
-
-            // Dynamic Heartbeat sound when stalker is close
-            playHeartbeat(rateMs = 800) {
-                if (!this.ctx) return;
-                const now = this.ctx.currentTime;
-                
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(60, now);
-                osc.frequency.exponentialRampToValueAtTime(30, now + 0.15);
-
-                gain.gain.setValueAtTime(0.4, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-
-                osc.start(now);
-                osc.stop(now + 0.15);
-            }
-
-            // Creepy shrieking jumpscare sound effect
-            playJumpscareSound() {
-                if (!this.ctx) return;
-                const now = this.ctx.currentTime;
-
-                // High pitch screech
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(1200, now);
-                osc.frequency.linearRampToValueAtTime(300, now + 1.2);
-
-                gain.gain.setValueAtTime(0.6, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
-
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-
-                osc.start(now);
-                osc.stop(now + 1.2);
-
-                // Deep noise burst
-                const bufferSize = this.ctx.sampleRate * 1.0;
-                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    data[i] = Math.random() * 2 - 1;
-                }
-
-                const noise = this.ctx.createBufferSource();
-                noise.buffer = buffer;
-
-                const noiseGain = this.ctx.createGain();
-                noiseGain.gain.setValueAtTime(0.5, now);
-                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
-
-                noise.connect(noiseGain);
-                noiseGain.connect(this.ctx.destination);
-
-                noise.start(now);
-            }
-        }
-
-        const audio = new SoundEngine();
-
-        /**
-         * PROCEDURAL TEXTURE GENERATOR
-         */
-        function createWallTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 256;
-            const ctx = canvas.getContext('2d');
-
-            ctx.fillStyle = '#111113';
-            ctx.fillRect(0, 0, 256, 256);
-
-            // Draw grungy stone bricks
-            ctx.strokeStyle = '#050505';
-            ctx.lineWidth = 4;
-
-            const rows = 8;
-            const cols = 4;
-            const rh = 256 / rows;
-            const cw = 256 / cols;
-
-            for (let r = 0; r < rows; r++) {
-                const y = r * rh;
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(256, y);
-                ctx.stroke();
-
-                const offset = (r % 2) * (cw / 2);
-                for (let c = 0; c < cols + 1; c++) {
-                    const x = c * cw - offset;
-                    ctx.beginPath();
-                    ctx.moveTo(x, y);
-                    ctx.lineTo(x, y + rh);
-                    ctx.stroke();
-                }
-            }
-
-            // Add noisy grit
-            for (let i = 0; i < 3000; i++) {
-                const x = Math.random() * 256;
-                const y = Math.random() * 256;
-                const shade = Math.floor(Math.random() * 40);
-                ctx.fillStyle = `rgba(${shade},${shade},${shade},0.15)`;
-                ctx.fillRect(x, y, 2, 2);
-            }
-
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            return texture;
-        }
-
-        /**
-         * MAZE DEFINITION & GAME GLOBALS
-         */
-        // 1 = Wall, 0 = Empty Path
-        const MAZE_GRID = [
-            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-            [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
-            [1,0,1,0,1,0,1,1,1,0,1,0,1,0,1],
-            [1,0,1,0,0,0,0,0,1,0,0,0,1,0,1],
-            [1,0,1,1,1,1,1,0,1,1,1,1,1,0,1],
-            [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-            [1,1,1,1,1,0,1,1,1,0,1,1,1,1,1],
-            [1,0,0,0,1,0,0,0,1,0,1,0,0,0,1],
-            [1,0,1,0,1,1,1,0,1,0,1,0,1,0,1],
-            [1,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
-            [1,0,1,1,1,0,1,1,1,1,1,1,1,0,1],
-            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
-            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-        ];
-
-        const UNIT_SIZE = 8;
-        const MAZE_WIDTH = MAZE_GRID[0].length;
-        const MAZE_HEIGHT = MAZE_GRID.length;
-
-        let scene, camera, renderer;
-        let flashlight, flashlightTarget;
-        let ambientLight;
-        let wallMeshGroup = new THREE.Group();
-        let artifacts = [];
-        let monsterMesh;
-
-        // Player State Variables
+        // Player (Hook Man)
         const player = {
-            position: new THREE.Vector3(UNIT_SIZE * 1.5, 2.5, UNIT_SIZE * 1.5),
-            velocity: new THREE.Vector3(),
-            pitch: 0,
-            yaw: 0,
-            stamina: 100,
-            flashlightBattery: 100,
-            flashlightOn: true,
-            collectedArtifacts: 0,
-            totalArtifacts: 5,
-            isDead: false,
-            hasWon: false
+            x: 100,
+            y: 250,
+            radius: 12,
+            vx: 3,
+            vy: 0,
+            gravity: 0.25,
+            friction: 0.995
         };
 
-        // Monster AI State
-        const monster = {
-            position: new THREE.Vector3(UNIT_SIZE * 13.5, 1.5, UNIT_SIZE * 11.5),
-            speed: 0.05,
-            chaseSpeed: 0.085,
-            isChasing: false,
-            patrolTarget: new THREE.Vector3()
+        // Grapple Hook
+        const hook = {
+            active: false,
+            targetPeg: null,
+            length: 0
         };
 
-        // Inputs State
-        const keys = { w: false, a: false, s: false, d: false, shift: false };
-        let isPointerLocked = false;
-        let heartbeatInterval = null;
+        // Anchor Pegs
+        const pegs = [];
+        const pegDistance = 150;
 
-        function initEngine() {
-            const canvas = document.getElementById('game-canvas');
-            
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-            // Scene & Creepy Volumetric Fog
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020203);
-            scene.fog = new THREE.FogExp2(0x020203, 0.06);
-
-            // Camera
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.copy(player.position);
-
-            // Lighting Setup
-            ambientLight = new THREE.AmbientLight(0x0a0a12, 0.2);
-            scene.add(ambientLight);
-
-            // Flashlight (SpotLight attached to player view)
-            flashlight = new THREE.SpotLight(0xfff5e0, 2.5, 35, Math.PI / 6, 0.4, 1);
-            flashlight.castShadow = true;
-            flashlight.shadow.mapSize.width = 1024;
-            flashlight.shadow.mapSize.height = 1024;
-            flashlight.shadow.camera.near = 0.5;
-            flashlight.shadow.camera.far = 35;
-
-            flashlightTarget = new THREE.Object3D();
-            scene.add(flashlightTarget);
-            flashlight.target = flashlightTarget;
-            scene.add(flashlight);
-
-            // Build Maze Geometry & Entity Mesh
-            buildMaze();
-            spawnArtifacts();
-            buildMonster();
-
-            // Resize Event Handler
-            window.addEventListener('resize', onWindowResize);
-        }
-
-        function buildMaze() {
-            const wallTexture = createWallTexture();
-            wallTexture.repeat.set(1, 1);
-
-            const wallMaterial = new THREE.MeshStandardMaterial({
-                map: wallTexture,
-                roughness: 0.9,
-                metalness: 0.1
-            });
-
-            const floorMaterial = new THREE.MeshStandardMaterial({
-                color: 0x111115,
-                roughness: 0.8
-            });
-
-            const wallGeometry = new THREE.BoxGeometry(UNIT_SIZE, 6, UNIT_SIZE);
-
-            // Construct Maze Walls from Grid
-            for (let r = 0; r < MAZE_HEIGHT; r++) {
-                for (let c = 0; c < MAZE_WIDTH; c++) {
-                    if (MAZE_GRID[r][c] === 1) {
-                        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-                        wall.position.set(
-                            c * UNIT_SIZE + UNIT_SIZE / 2,
-                            3,
-                            r * UNIT_SIZE + UNIT_SIZE / 2
-                        );
-                        wall.castShadow = true;
-                        wall.receiveShadow = true;
-                        wallMeshGroup.add(wall);
-                    }
-                }
-            }
-            scene.add(wallMeshGroup);
-
-            // Floor Geometry
-            const floorGeo = new THREE.PlaneGeometry(MAZE_WIDTH * UNIT_SIZE, MAZE_HEIGHT * UNIT_SIZE);
-            const floor = new THREE.Mesh(floorGeo, floorMaterial);
-            floor.rotation.x = -Math.PI / 2;
-            floor.position.set((MAZE_WIDTH * UNIT_SIZE) / 2, 0, (MAZE_HEIGHT * UNIT_SIZE) / 2);
-            floor.receiveShadow = true;
-            scene.add(floor);
-
-            // Ceiling Geometry
-            const ceiling = new THREE.Mesh(floorGeo, wallMaterial);
-            ceiling.rotation.x = Math.PI / 2;
-            ceiling.position.set((MAZE_WIDTH * UNIT_SIZE) / 2, 6, (MAZE_HEIGHT * UNIT_SIZE) / 2);
-            scene.add(ceiling);
-        }
-
-        function spawnArtifacts() {
-            const artifactGeo = new THREE.OctahedronGeometry(0.6);
-            const artifactMat = new THREE.MeshStandardMaterial({
-                color: 0xff0033,
-                emissive: 0x990022,
-                emissiveIntensity: 0.8,
-                roughness: 0.2
-            });
-
-            // Specific open coordinate points inside the maze
-            const spawnPoints = [
-                { r: 1, c: 13 },
-                { r: 11, c: 1 },
-                { r: 5, c: 7 },
-                { r: 9, c: 9 },
-                { r: 11, c: 13 }
-            ];
-
-            spawnPoints.forEach((pt, index) => {
-                const mesh = new THREE.Mesh(artifactGeo, artifactMat);
-                mesh.position.set(
-                    pt.c * UNIT_SIZE + UNIT_SIZE / 2,
-                    1.5,
-                    pt.r * UNIT_SIZE + UNIT_SIZE / 2
-                );
-
-                // Dynamic glowing point light for artifact
-                const light = new THREE.PointLight(0xff0033, 1, 6);
-                light.position.copy(mesh.position);
-                scene.add(light);
-
-                mesh.userData = { id: index, light: light, isCollected: false };
-                artifacts.push(mesh);
-                scene.add(mesh);
-            });
-        }
-
-        function buildMonster() {
-            const group = new THREE.Group();
-
-            // Creepy tall shadow body
-            const bodyGeo = new THREE.CylinderGeometry(0.5, 0.2, 4, 8);
-            const bodyMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
-            const body = new THREE.Mesh(bodyGeo, bodyMat);
-            body.position.y = 2;
-            group.add(body);
-
-            // Glowing red eyes
-            const eyeGeo = new THREE.SphereGeometry(0.08, 8, 8);
-            const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-
-            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-            leftEye.position.set(-0.2, 3.6, 0.45);
-
-            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-            rightEye.position.set(0.2, 3.6, 0.45);
-
-            group.add(leftEye);
-            group.add(rightEye);
-
-            monsterMesh = group;
-            monsterMesh.position.copy(monster.position);
-            scene.add(monsterMesh);
-
-            pickNewMonsterPatrolTarget();
-        }
-
-        function pickNewMonsterPatrolTarget() {
-            let valid = false;
-            while (!valid) {
-                const r = Math.floor(Math.random() * MAZE_HEIGHT);
-                const c = Math.floor(Math.random() * MAZE_WIDTH);
-                if (MAZE_GRID[r][c] === 0) {
-                    monster.patrolTarget.set(
-                        c * UNIT_SIZE + UNIT_SIZE / 2,
-                        1.5,
-                        r * UNIT_SIZE + UNIT_SIZE / 2
-                    );
-                    valid = true;
-                }
+        function initPegs() {
+            pegs.length = 0;
+            for (let x = 150; x < 2000; x += pegDistance) {
+                pegs.push({
+                    x: x,
+                    y: 80 + Math.random() * 120,
+                    radius: 8
+                });
             }
         }
 
-        function setupControls() {
-            const startBtn = document.getElementById('start-btn');
-            
-            startBtn.addEventListener('click', () => {
-                audio.init();
-                document.body.requestPointerLock();
-            });
+        initPegs();
 
-            document.addEventListener('pointerlockchange', () => {
-                if (document.pointerLockElement === document.body) {
-                    isPointerLocked = true;
-                    document.getElementById('menu-overlay').classList.add('hidden');
-                    document.getElementById('hud').classList.remove('hidden');
-                } else {
-                    isPointerLocked = false;
-                    if (!player.isDead && !player.hasWon) {
-                        document.getElementById('menu-title').textContent = "PAUSED";
-                        document.getElementById('menu-subtitle').textContent = "Click button below to resume playing.";
-                        document.getElementById('start-btn').textContent = "Resume Game";
-                        document.getElementById('menu-overlay').classList.remove('hidden');
-                    }
-                }
-            });
+        // Mouse Controls
+        let isMouseDown = false;
+        let mouseX = 0;
+        let mouseY = 0;
 
-            // Mouse Look
-            document.addEventListener('mousemove', (e) => {
-                if (!isPointerLocked || player.isDead) return;
+        window.addEventListener('mousedown', (e) => {
+            isMouseDown = true;
+            updateMousePos(e);
+            if (!hook.active && !gameOver) {
+                tryAttachHook();
+            }
+        });
 
-                const sensitivity = 0.0025;
-                player.yaw -= e.movementX * sensitivity;
-                player.pitch -= e.movementY * sensitivity;
+        window.addEventListener('mouseup', () => {
+            isMouseDown = false;
+            hook.active = false;
+            hook.targetPeg = null;
+        });
 
-                // Limit vertical look angle
-                player.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, player.pitch));
-            });
+        window.addEventListener('mousemove', updateMousePos);
 
-            // Key Events
-            document.addEventListener('keydown', (e) => {
-                switch (e.code) {
-                    case 'KeyW': keys.w = true; break;
-                    case 'KeyA': keys.a = true; break;
-                    case 'KeyS': keys.s = true; break;
-                    case 'KeyD': keys.d = true; break;
-                    case 'ShiftLeft':
-                    case 'ShiftRight': keys.shift = true; break;
-                    case 'KeyF': toggleFlashlight(); break;
-                    case 'KeyE': interact(); break;
-                }
-            });
-
-            document.addEventListener('keyup', (e) => {
-                switch (e.code) {
-                    case 'KeyW': keys.w = false; break;
-                    case 'KeyA': keys.a = false; break;
-                    case 'KeyS': keys.s = false; break;
-                    case 'KeyD': keys.d = false; break;
-                    case 'ShiftLeft':
-                    case 'ShiftRight': keys.shift = false; break;
-                }
-            });
+        function updateMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
         }
 
-        function toggleFlashlight() {
-            if (player.flashlightBattery <= 0 || player.isDead) return;
-            player.flashlightOn = !player.flashlightOn;
-            flashlight.visible = player.flashlightOn;
-            audio.playSwitchSound();
-        }
+        function tryAttachHook() {
+            let closestPeg = null;
+            let minDistance = 200; // Max hook range
 
-        function interact() {
-            if (player.isDead || player.hasWon) return;
+            for (let peg of pegs) {
+                const dx = peg.x - player.x;
+                const dy = peg.y - player.y;
+                const dist = Math.hypot(dx, dy);
 
-            artifacts.forEach(item => {
-                if (!item.userData.isCollected) {
-                    const dist = player.position.distanceTo(item.position);
-                    if (dist < 4.0) {
-                        // Collect artifact
-                        item.userData.isCollected = true;
-                        scene.remove(item);
-                        scene.remove(item.userData.light);
-
-                        player.collectedArtifacts++;
-                        audio.playPickupSound();
-
-                        // Update HUD
-                        document.getElementById('objective-text').textContent = 
-                            `Collect Cursed Artifacts (${player.collectedArtifacts}/${player.totalArtifacts})`;
-
-                        if (player.collectedArtifacts >= player.totalArtifacts) {
-                            triggerVictory();
-                        }
-                    }
-                }
-            });
-        }
-
-        function checkWallCollision(newPos) {
-            const radius = 0.8;
-            for (let r = 0; r < MAZE_HEIGHT; r++) {
-                for (let c = 0; c < MAZE_WIDTH; c++) {
-                    if (MAZE_GRID[r][c] === 1) {
-                        const minX = c * UNIT_SIZE;
-                        const maxX = minX + UNIT_SIZE;
-                        const minZ = r * UNIT_SIZE;
-                        const maxZ = minZ + UNIT_SIZE;
-
-                        // Closest point calculation
-                        const closestX = Math.max(minX, Math.min(newPos.x, maxX));
-                        const closestZ = Math.max(minZ, Math.min(newPos.z, maxZ));
-
-                        const distX = newPos.x - closestX;
-                        const distZ = newPos.z - closestZ;
-                        const distanceSquared = (distX * distX) + (distZ * distZ);
-
-                        if (distanceSquared < (radius * radius)) {
-                            return true; // Collision detected
-                        }
-                    }
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestPeg = peg;
                 }
             }
-            return false;
+
+            if (closestPeg) {
+                hook.active = true;
+                hook.targetPeg = closestPeg;
+                hook.length = minDistance;
+            }
         }
 
-        function updateMonster() {
-            if (player.isDead || player.hasWon) return;
+        function resetGame() {
+            player.x = 100;
+            player.y = 250;
+            player.vx = 3;
+            player.vy = 0;
+            score = 0;
+            gameOver = false;
+            hook.active = false;
+            hook.targetPeg = null;
+            initPegs();
+            statusDisplay.textContent = "Click and hold to hook!";
+        }
 
-            const distToPlayer = monster.position.distanceTo(player.position);
+        function update() {
+            if (gameOver) return;
 
-            // Heartbeat audio update based on proximity
-            if (distToPlayer < 25) {
-                if (!heartbeatInterval) {
-                    heartbeatInterval = setInterval(() => {
-                        const rate = Math.max(200, distToPlayer * 30);
-                        audio.playHeartbeat(rate);
-                    }, 600);
+            // Apply Physics
+            if (hook.active && hook.targetPeg) {
+                // Hook Swinging Physics
+                const dx = player.x - hook.targetPeg.x;
+                const dy = player.y - hook.targetPeg.y;
+                const currentDist = Math.hypot(dx, dy);
+
+                // Tension force pulling player towards target peg
+                if (currentDist > hook.length) {
+                    const angle = Math.atan2(dy, dx);
+                    const targetX = hook.targetPeg.x + Math.cos(angle) * hook.length;
+                    const targetY = hook.targetPeg.y + Math.sin(angle) * hook.length;
+
+                    player.vx += (targetX - player.x) * 0.1;
+                    player.vy += (targetY - player.y) * 0.1;
                 }
-            } else if (heartbeatInterval) {
-                clearInterval(heartbeatInterval);
-                heartbeatInterval = null;
-            }
 
-            // Line of sight / proximity trigger chase
-            if (distToPlayer < 20) {
-                monster.isChasing = true;
-                document.getElementById('status-text').textContent = "HUNTED!";
-                document.getElementById('status-text').className = "text-xs text-red-600 font-mono animate-pulse";
+                player.vy += player.gravity * 0.5; // Reduced gravity while hooked
             } else {
-                monster.isChasing = false;
-                document.getElementById('status-text').textContent = "NORMAL";
-                document.getElementById('status-text').className = "text-xs text-green-400 font-mono";
+                // Free Fall Physics
+                player.vy += player.gravity;
             }
 
-            // Movement logic
-            let target = monster.isChasing ? player.position : monster.patrolTarget;
-            let currentSpeed = monster.isChasing ? monster.chaseSpeed : monster.speed;
+            // Air resistance
+            player.vx *= player.friction;
+            player.vy *= player.friction;
 
-            let dir = new THREE.Vector3().subVectors(target, monster.position);
-            dir.y = 0; // Lock to floor plane
+            // Move player
+            player.x += player.vx;
+            player.y += player.vy;
 
-            if (dir.length() < 1.0 && !monster.isChasing) {
-                pickNewMonsterPatrolTarget();
-            } else {
-                dir.normalize();
-                monster.position.addScaledVector(dir, currentSpeed);
-                monsterMesh.position.copy(monster.position);
-                monsterMesh.lookAt(player.position.x, monsterMesh.position.y, player.position.z);
+            // Camera Tracking (Scroll screen horizontally)
+            const cameraOffset = player.x - 200;
+
+            // Generate new pegs as player moves forward
+            const lastPeg = pegs[pegs.length - 1];
+            if (lastPeg.x - cameraOffset < canvas.width + 100) {
+                pegs.push({
+                    x: lastPeg.x + pegDistance + (Math.random() * 40 - 20),
+                    y: 80 + Math.random() * 120,
+                    radius: 8
+                });
             }
 
-            // Check Jumpscare / Catch Condition
-            if (distToPlayer < 2.0) {
-                triggerJumpscare();
-            }
-        }
+            // Update Score
+            score = Math.max(score, Math.floor(player.x / 10) - 10);
+            scoreDisplay.textContent = `Score: ${score}`;
 
-        function triggerJumpscare() {
-            player.isDead = true;
-            document.exitPointerLock();
-
-            audio.playJumpscareSound();
-
-            const jumpscareOverlay = document.getElementById('jumpscare-container');
-            jumpscareOverlay.classList.remove('hidden');
-            document.body.classList.add('shake');
-
-            setTimeout(() => {
-                jumpscareOverlay.classList.add('hidden');
-                document.body.classList.remove('shake');
-
-                document.getElementById('menu-title').textContent = "YOU DIED";
-                document.getElementById('menu-subtitle').textContent = "The entity caught you in the darkness.";
-                document.getElementById('start-btn').textContent = "Try Again";
-                document.getElementById('menu-overlay').classList.remove('hidden');
-
-                // Reset position on restart
-                startBtnReset();
-            }, 1200);
-        }
-
-        function triggerVictory() {
-            player.hasWon = true;
-            document.exitPointerLock();
-
-            document.getElementById('menu-title').textContent = "ESCAPED!";
-            document.getElementById('menu-title').className = "text-4xl md:text-6xl font-extrabold text-green-500 tracking-widest uppercase mb-2";
-            document.getElementById('menu-subtitle').textContent = "You collected all 5 artifacts and survived the horror!";
-            document.getElementById('start-btn').textContent = "Play Again";
-            document.getElementById('menu-overlay').classList.remove('hidden');
-
-            startBtnReset();
-        }
-
-        function startBtnReset() {
-            const btn = document.getElementById('start-btn');
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
-
-            newBtn.addEventListener('click', () => {
-                window.location.reload();
-            });
-        }
-
-        function updatePlayerMovement() {
-            if (!isPointerLocked || player.isDead) return;
-
-            // Movement speeds
-            const isSprinting = keys.shift && player.stamina > 0 && (keys.w || keys.a || keys.s || keys.d);
-            const speed = isSprinting ? 0.18 : 0.09;
-
-            // Handle Stamina Decay/Regen
-            if (isSprinting) {
-                player.stamina = Math.max(0, player.stamina - 0.4);
-            } else {
-                player.stamina = Math.min(100, player.stamina + 0.2);
-            }
-            document.getElementById('stamina-bar').style.width = `${player.stamina}%`;
-
-            // Flashlight battery decay when turned on
-            if (player.flashlightOn) {
-                player.flashlightBattery = Math.max(0, player.flashlightBattery - 0.015);
-                document.getElementById('battery-bar').style.width = `${player.flashlightBattery}%`;
-                document.getElementById('battery-num').textContent = `${Math.floor(player.flashlightBattery)}%`;
-
-                if (player.flashlightBattery <= 0) {
-                    player.flashlightOn = false;
-                    flashlight.visible = false;
-                } else if (player.flashlightBattery < 20 && Math.random() < 0.05) {
-                    // Creepy flicker effect on low battery
-                    flashlight.visible = !flashlight.visible;
-                }
-            }
-
-            // Calculate forward and right directional vectors
-            const forward = new THREE.Vector3(
-                -Math.sin(player.yaw),
-                0,
-                -Math.cos(player.yaw)
-            ).normalize();
-
-            const right = new THREE.Vector3(
-                Math.cos(player.yaw),
-                0,
-                -Math.sin(player.yaw)
-            ).normalize();
-
-            const moveDir = new THREE.Vector3(0, 0, 0);
-
-            if (keys.w) moveDir.add(forward);
-            if (keys.s) moveDir.sub(forward);
-            if (keys.d) moveDir.add(right);
-            if (keys.a) moveDir.sub(right);
-
-            if (moveDir.length() > 0) moveDir.normalize();
-
-            // Collision check on X axis
-            const targetPosX = player.position.x + moveDir.x * speed;
-            if (!checkWallCollision(new THREE.Vector3(targetPosX, player.position.y, player.position.z))) {
-                player.position.x = targetPosX;
-            }
-
-            // Collision check on Z axis
-            const targetPosZ = player.position.z + moveDir.z * speed;
-            if (!checkWallCollision(new THREE.Vector3(player.position.x, player.position.y, targetPosZ))) {
-                player.position.z = targetPosZ;
-            }
-
-            // Update Camera Position and Orientation
-            camera.position.copy(player.position);
-
-            const lookTarget = new THREE.Vector3(
-                player.position.x - Math.sin(player.yaw) * Math.cos(player.pitch),
-                player.position.y + Math.sin(player.pitch),
-                player.position.z - Math.cos(player.yaw) * Math.cos(player.pitch)
-            );
-            camera.lookAt(lookTarget);
-
-            // Attach flashlight to player view target
-            flashlight.position.copy(player.position);
-            flashlightTarget.position.copy(lookTarget);
-
-            // Artifact Interaction Check Proximity UI
-            let nearArtifact = false;
-            artifacts.forEach(item => {
-                if (!item.userData.isCollected && player.position.distanceTo(item.position) < 4.0) {
-                    nearArtifact = true;
-                }
-            });
-
-            const interactPrompt = document.getElementById('interact-prompt');
-            if (nearArtifact) {
-                interactPrompt.classList.remove('hidden');
-            } else {
-                interactPrompt.classList.add('hidden');
+            // Check Game Over Conditions
+            if (player.y > canvas.height + 50 || player.y < -200) {
+                gameOver = true;
+                statusDisplay.textContent = "Game Over! Click anywhere to restart.";
             }
         }
 
-        function animateArtifacts() {
-            artifacts.forEach(item => {
-                if (!item.userData.isCollected) {
-                    item.rotation.y += 0.02;
-                    item.position.y = 1.5 + Math.sin(Date.now() * 0.003) * 0.15;
-                }
-            });
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const cameraOffset = player.x - 200;
+
+            ctx.save();
+            ctx.translate(-cameraOffset, 0);
+
+            // Draw Hook Line
+            if (hook.active && hook.targetPeg) {
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y);
+                ctx.lineTo(hook.targetPeg.x, hook.targetPeg.y);
+                ctx.strokeStyle = '#e94560';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            // Draw Pegs
+            for (let peg of pegs) {
+                ctx.beginPath();
+                ctx.arc(peg.x, peg.y, peg.radius, 0, Math.PI * 2);
+                ctx.fillStyle = (hook.targetPeg === peg) ? '#e94560' : '#00fff5';
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            // Draw Player (Hook Man)
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#ff2e63';
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+            ctx.closePath();
+
+            // Draw Hook hand detail
+            ctx.beginPath();
+            ctx.arc(player.x + 8, player.y - 4, 4, 0, Math.PI);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.restore();
+
+            // Handle Restart on Click
+            if (gameOver && isMouseDown) {
+                resetGame();
+            }
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
         }
 
-        // Main Loop
-        function animate() {
-            requestAnimationFrame(animate);
-
-            updatePlayerMovement();
-            updateMonster();
-            animateArtifacts();
-
-            renderer.render(scene, camera);
-        }
-
-        // Window Load Initialization
-        window.onload = function() {
-            initEngine();
-            setupControls();
-            animate();
-        };
+        gameLoop();
     </script>
 </body>
 </html>
